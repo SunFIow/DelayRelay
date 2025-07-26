@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start DelayRelay Proxy",
+			"type": "shell",
+			"command": "yarn start",
+			"problemMatcher": [],
+			"options": {
+				"shell": {
+					"executable": "C:\\Windows\\System32\\cmd.exe"
+				}
+			}
+		},
+		{
+			"label": "Echo Test",
+			"type": "process",
+			"command": "echo System test successful!",
+			"problemMatcher": []
+		}
+	]
+}
