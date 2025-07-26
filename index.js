@@ -1,10 +1,12 @@
 const net = require('net');
 const http = require('http');
+const fs = require('fs');
 
 // Configuration
 let LOCAL_PORT = 1935; // RTMP default port
 let STREAM_DELAY_MS = 10_000; // 10 seconds delay
-let delayActive = false; // Whether to apply the delay
+/**@type {"REALTIME" | "BUFFERING" | "DELAY"} */
+let state = 'REALTIME'; // Whether to apply the delay
 
 let REMOTE_RTMP_URL = 'live.twitch.tv'; // Twitch RTMP URL
 let REMOTE_RTMP_PORT = 1935; // Twitch RTMP port
@@ -55,7 +57,7 @@ const handleStreamDelay = (req, res) => {
 
 const handleActivateDelay = (req, res) => {
 	if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
-		delayActive = true;
+		state = 'BUILD_UP_DELAY';
 		console.log(`[API] Delay activated`);
 		res.writeHead(200, { 'Content-Type': 'text/plain' });
 		res.end(`Delay activated\n`);
@@ -66,7 +68,7 @@ const handleActivateDelay = (req, res) => {
 
 const handleDeactivateDelay = (req, res) => {
 	if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-		delayActive = false;
+		state = 'REALTIME';
 		console.log(`[API] Delay deactivated`);
 		res.writeHead(200, { 'Content-Type': 'text/plain' });
 		res.end(`Delay deactivated\n`);
@@ -171,7 +173,7 @@ const handleStatus = (req, res) => {
 		const status = {
 			localPort: LOCAL_PORT,
 			streamDelay: STREAM_DELAY_MS,
-			delayActive: delayActive,
+			state: state,
 			remoteUrl: REMOTE_RTMP_URL,
 			remotePort: REMOTE_RTMP_PORT,
 			latencyInterval: LATENCY_INTERVAL,
@@ -201,6 +203,13 @@ const apiServer = http.createServer((req, res) => {
 	if (handleStatus(req, res)) return;
 
 	// If no handlers responded, return a simple homepage
+	simplePage(req, res);
+});
+apiServer.listen(HTTP_API_PORT, () => {
+	console.log(`[API] HTTP API listening on http://localhost:${HTTP_API_PORT}`);
+});
+
+function simplePage(req, res) {
 	res.writeHead(200, { 'Content-Type': 'text/html' });
 	res.end(`
 		<!DOCTYPE html>
@@ -209,33 +218,32 @@ const apiServer = http.createServer((req, res) => {
 			<title>RTMP Delay Relay</title>
 		</head>
 		<body>
-			<h1>Welcome to the RTMP Delay Relay</h1>
-			<p>Use the following API endpoints:</p>
-			<ul>
-				<li>Set local port: <code>GET /set-local-port?port=1935</code></li>
-				<li>Set delay: <code>GET /set-delay?ms=15000</code></li>
-				<li>Activate delay: <code>GET /activate-delay</code></li>
-				<li>Deactivate delay: <code>GET /deactivate-delay</code></li
-				<li>Set RTMP URL: <code>GET /set-remote-url?url=live.twitch.tv</code></li>
-				<li>Set RTMP port: <code>GET /set-rtmp-port?port=1935</code></li>
-				<li>Set latency: <code>GET /set-latency?ms=10</code></li>
-				<li>Set max buffer chunks: <code>GET /set-max-chunks?chunks=10000</code></li>
-				<li>Set max buffer bytes: <code>GET /set-max-bytes?bytes=52428800</code></li>
-				<li>Get status: <code>GET /status</code></li>
-			</ul>
+			<h1>RTMP Delay Relay</h1>
+			<p>API is running. Use the endpoints to control the proxy.</p>
 		</body>
 		</html>
 	`);
-});
-apiServer.listen(HTTP_API_PORT, () => {
-	console.log(`[API] HTTP API listening on http://localhost:${HTTP_API_PORT}`);
-});
+}
 
 // RTMP proxy with true continuous streaming delay
 const server = net.createServer(clientSocket => {
 	clientSocket.setNoDelay(true); // Disable Nagle's algorithm for low latency
 
-	/** @type {net.Socket|null} */ let twitchSocket = null;
+	// Connect to Twitch immediately
+	const twitchSocket = net.connect(REMOTE_RTMP_PORT, REMOTE_RTMP_URL, () => {
+		console.log(`[Connect] Connected to Twitch for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+		// Pipe Twitch responses back to OBS (optional)
+		twitchSocket.pipe(clientSocket);
+	});
+	twitchSocket.setNoDelay(true); // Disable Nagle's algorithm for low latency
+
+	twitchSocket.on('error', err => {
+		console.error(`[Error] Twitch socket error: ${err.message}`);
+	});
+	twitchSocket.on('close', () => {
+		console.log(`[Disconnect] Twitch socket closed for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+	});
+
 	let ended = false;
 
 	// Timed buffer for continuous delay
@@ -277,7 +285,7 @@ const server = net.createServer(clientSocket => {
 
 	// Helper: pop and return all chunks older than delay
 	function popDelayedChunks() {
-		const STREAM_DELAY_MS = delayActive ? STREAM_DELAY_MS : 0; // Use configured delay if active
+		const STREAM_DELAY_MS = state === 'REALTIME' ? 0 : STREAM_DELAY_MS; // Use configured delay if active
 		const now = Date.now();
 		const ready = [];
 		while (timedBuffer.length && now - timedBuffer[0].time >= STREAM_DELAY_MS) {
@@ -291,30 +299,11 @@ const server = net.createServer(clientSocket => {
 		return ready;
 	}
 
-	// Connect to Twitch immediately
-	twitchSocket = net.connect(REMOTE_RTMP_PORT, REMOTE_RTMP_URL, () => {
-		console.log(`[Connect] Connected to Twitch for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
-		// Pipe Twitch responses back to OBS (optional)
-		twitchSocket.pipe(clientSocket);
-	});
-	twitchSocket.setNoDelay(true); // Disable Nagle's algorithm for low latency
-
 	// Buffer incoming data from OBS
 	clientSocket.on('data', chunk => {
 		if (ended) return;
 		pushToBuffer(chunk);
 	});
-
-	// Periodically flush delayed data to Twitch
-	const interval = setInterval(() => {
-		if (ended) return;
-		const readyChunks = popDelayedChunks();
-		for (const chunk of readyChunks) {
-			if (twitchSocket?.writable) {
-				twitchSocket.write(chunk);
-			}
-		}
-	}, LATENCY_INTERVAL); // Check every 10ms for low latency
 
 	clientSocket.on('close', () => {
 		ended = true;
@@ -322,20 +311,56 @@ const server = net.createServer(clientSocket => {
 		if (twitchSocket) twitchSocket.end();
 		console.log(`[Disconnect] OBS client disconnected: ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
 	});
+
 	clientSocket.on('error', err => {
 		ended = true;
 		clearInterval(interval);
 		if (twitchSocket) twitchSocket.destroy();
 		console.error(`[Error] OBS client error: ${err.message}`);
 	});
-	if (twitchSocket) {
-		twitchSocket.on('error', err => {
-			console.error(`[Error] Twitch socket error: ${err.message}`);
+
+	/**@type {fs.ReadStream} */
+	let imageStream = null;
+	let imageStreamEnded = false;
+	function sendImageToTwitch() {
+		if (imageStream) return; // Already sending
+		imageStream = fs.createReadStream('standby.flv'); // Your FLV video file
+		imageStreamEnded = false;
+		imageStream.on('data', chunk => {
+			if (twitchSocket?.writable) {
+				twitchSocket.write(chunk);
+			}
 		});
-		twitchSocket.on('close', () => {
-			console.log(`[Disconnect] Twitch socket closed for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+		imageStream.on('end', () => {
+			imageStreamEnded = true;
+			console.log('[Image] Standby image stream ended.');
 		});
+		imageStream.on('error', err => {
+			console.error('[Image] Error streaming standby image:', err);
+		});
+
+		setTimeout(() => {
+			imageStream.destroy();
+			imageStream = null;
+			console.log('[Image] Standby image stream destroyed.');
+		}, STREAM_DELAY_MS); // Adjust timeout as needed
 	}
+
+	// Periodically flush delayed data to Twitch
+	const interval = setInterval(() => {
+		if (ended) return;
+		if (state === 'BUILD_UP_DELAY') {
+			sendImageToTwitch(); // Send standby image if delay is active
+			return;
+		}
+
+		const readyChunks = popDelayedChunks();
+		for (const chunk of readyChunks) {
+			if (twitchSocket?.writable) {
+				twitchSocket.write(chunk);
+			}
+		}
+	}, LATENCY_INTERVAL); // Check every 10ms for low latency
 });
 
 server.listen(LOCAL_PORT, () => {
