@@ -18,7 +18,8 @@
 	"main": "src/index.js",
 	"license": "MIT",
 	"scripts": {
-		"start": "node src/index.js"
+		"start": "node src/index.js",
+		"dummy": "node test/dummy_rtmp_server.js"
 	},
 	"dependencies": {
 		"node-media-server": "^4.0.18"
