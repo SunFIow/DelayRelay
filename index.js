@@ -63,9 +63,9 @@ const HTTP_API_PORT = 8080; // Port for the HTTP API
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
 // Extracted HTTP API server (handlers are now in apiServer.js)
-const createApiServer = require('./apiServer');
+const { ApiServer } = require('./apiServer');
 
-createApiServer({
+new ApiServer({
 	port: HTTP_API_PORT,
 	getConfig: () => ({
 		LOCAL_PORT,
@@ -93,6 +93,7 @@ createApiServer({
 
 // Modular buffer logic using StreamBuffer
 const StreamBuffer = require('./streamBuffer');
+const { ApiServer } = require('./apiServer');
 
 const server = net.createServer(clientSocket => {
 	clientSocket.setNoDelay(true);

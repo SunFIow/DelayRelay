@@ -3,8 +3,22 @@
 
 const http = require('http');
 
-function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }) {
-	function simplePage(req, res) {
+export class ApiServer {
+	constructor({ port, getConfig, setConfig, logToApiFile, logToFile }) {
+		this.port = port;
+		this.getConfig = getConfig;
+		this.setConfig = setConfig;
+		this.logToApiFile = logToApiFile;
+		this.logToFile = logToFile;
+		this.server = http.createServer(this.requestHandler.bind(this));
+		this.server.listen(this.port, () => {
+			if (this.logToApiFile) this.logToApiFile('INFO', `HTTP API listening on http://localhost:${this.port}`);
+			if (this.logToFile) this.logToFile('INFO', `HTTP API listening on http://localhost:${this.port}`);
+			console.log(`HTTP API listening on http://localhost:${this.port}`);
+		});
+	}
+
+	simplePage(req, res) {
 		res.writeHead(200, { 'Content-Type': 'text/html' });
 		res.end(`
 	  <!DOCTYPE html>
@@ -32,14 +46,15 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 	`);
 	}
 
-	const server = http.createServer((req, res) => {
+	requestHandler(req, res) {
 		// /set-local-port?port=8888
+
 		if (req.method === 'GET' && req.url.startsWith('/set-local-port')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
-				setConfig('LOCAL_PORT', portVal);
-				logToApiFile('INFO', `Local port set to ${portVal}`);
+				this.setConfig('LOCAL_PORT', portVal);
+				this.logToApiFile('INFO', `Local port set to ${portVal}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Local port set to ${portVal}\n`);
 			} else {
@@ -53,8 +68,8 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const ms = parseInt(url.searchParams.get('ms'), 10);
 			if (!isNaN(ms) && ms > 0) {
-				setConfig('STREAM_DELAY_MS', ms);
-				logToApiFile('INFO', `Stream delay set to ${ms} ms (${(ms / 1000).toFixed(2)}s)`);
+				this.setConfig('STREAM_DELAY_MS', ms);
+				this.logToApiFile('INFO', `Stream delay set to ${ms} ms (${(ms / 1000).toFixed(2)}s)`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Stream delay set to ${ms} ms\n`);
 			} else {
@@ -65,17 +80,17 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 		}
 		// /activate-delay
 		if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
-			setConfig('STATE', 'BUFFERING');
-			logToApiFile('INFO', `Delay activated`);
-			logToFile('INFO', `Delay activated`);
+			this.setConfig('STATE', 'BUFFERING');
+			this.logToApiFile('INFO', `Delay activated`);
+			this.logToFile('INFO', `Delay activated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay activated\n`);
 			return;
 		}
 		// /deactivate-delay
 		if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-			setConfig('STATE', 'FORWARDING');
-			logToApiFile('INFO', `Delay deactivated`);
+			this.setConfig('STATE', 'FORWARDING');
+			this.logToApiFile('INFO', `Delay deactivated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay deactivated\n`);
 			return;
@@ -85,8 +100,8 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const remoteUrl = url.searchParams.get('url');
 			if (remoteUrl) {
-				setConfig('REMOTE_RTMP_URL', remoteUrl);
-				logToApiFile('INFO', `Remote RTMP URL set to ${remoteUrl}`);
+				this.setConfig('REMOTE_RTMP_URL', remoteUrl);
+				this.logToApiFile('INFO', `Remote RTMP URL set to ${remoteUrl}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Remote RTMP URL set to ${remoteUrl}\n`);
 			} else {
@@ -100,8 +115,8 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
-				setConfig('REMOTE_RTMP_PORT', portVal);
-				logToApiFile('INFO', `Twitch RTMP port set to ${portVal}`);
+				this.setConfig('REMOTE_RTMP_PORT', portVal);
+				this.logToApiFile('INFO', `Twitch RTMP port set to ${portVal}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Twitch RTMP port set to ${portVal}\n`);
 			} else {
@@ -115,8 +130,8 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const latency = parseInt(url.searchParams.get('ms'), 10);
 			if (!isNaN(latency) && latency > 0) {
-				setConfig('LATENCY_INTERVAL', latency);
-				logToApiFile('INFO', `Latency interval set to ${latency} ms`);
+				this.setConfig('LATENCY_INTERVAL', latency);
+				this.logToApiFile('INFO', `Latency interval set to ${latency} ms`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Latency interval set to ${latency} ms\n`);
 			} else {
@@ -130,8 +145,8 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const chunks = parseInt(url.searchParams.get('chunks'), 10);
 			if (!isNaN(chunks) && chunks > 0) {
-				setConfig('MAX_BUFFER_CHUNKS', chunks);
-				logToApiFile('INFO', `Max buffer chunks set to ${chunks}`);
+				this.setConfig('MAX_BUFFER_CHUNKS', chunks);
+				this.logToApiFile('INFO', `Max buffer chunks set to ${chunks}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Max buffer chunks set to ${chunks}\n`);
 			} else {
@@ -145,8 +160,8 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const bytes = parseInt(url.searchParams.get('bytes'), 10);
 			if (!isNaN(bytes) && bytes > 0) {
-				setConfig('MAX_BUFFER_BYTES', bytes);
-				logToApiFile('INFO', `Max buffer bytes set to ${bytes}`);
+				this.setConfig('MAX_BUFFER_BYTES', bytes);
+				this.logToApiFile('INFO', `Max buffer bytes set to ${bytes}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Max buffer bytes set to ${bytes}\n`);
 			} else {
@@ -157,7 +172,7 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 		}
 		// /status
 		if (req.method === 'GET' && req.url === '/status') {
-			const config = getConfig();
+			const config = this.getConfig();
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
@@ -173,17 +188,10 @@ function createApiServer({ port, getConfig, setConfig, logToApiFile, logToFile }
 			);
 			return;
 		}
+
 		// If no handlers responded, return a simple homepage
-		simplePage(req, res);
-	});
-
-	server.listen(port, () => {
-		if (logToApiFile) logToApiFile('INFO', `HTTP API listening on http://localhost:${port}`);
-		if (logToFile) logToFile('INFO', `HTTP API listening on http://localhost:${port}`);
-		console.log(`HTTP API listening on http://localhost:${port}`);
-	});
-
-	return server;
+		this.simplePage(req, res);
+	}
 }
 
-module.exports = createApiServer;
+// module.exports = ApiServer;
