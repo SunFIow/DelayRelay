@@ -1,6 +1,6 @@
 // Dummy RTMP/TCP server for testing DelayRelay proxy
-const net = require('net');
-const fs = require('fs');
+import net from 'net';
+import fs from 'fs';
 
 const LOG_FILE = 'dummy_rtmp_server.log';
 const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });

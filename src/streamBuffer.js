@@ -1,46 +1,26 @@
 import { LOGGER } from './logger.js';
 
-export class StreamBuffer {
-	/**
-	 * @param {object} opts
-	 * @param {number} opts.streamDelayMs
-	 * @param {number} opts.maxBufferChunks
-	 * @param {number} opts.maxBufferBytes
-	 * @param {function} opts.formatBytes
-	 * @param {string} opts.initialState
-	 * @param {number} opts.logEvery
-	 */
-	constructor({ streamDelayMs, maxBufferChunks, maxBufferBytes, formatBytes, initialState = 'REALTIME', logEvery = 100 }) {
-		this.STREAM_DELAY_MS = streamDelayMs;
-		this.MAX_BUFFER_CHUNKS = maxBufferChunks;
-		this.MAX_BUFFER_BYTES = maxBufferBytes;
-		this.STATE = initialState;
-		this.LOG_EVERY = logEvery;
-		this.formatBytes = formatBytes;
+const LOG_EVERY = 100; // Log every 100 chunks for performance
 
+import { config } from './config.js';
+
+export class StreamBuffer {
+	constructor() {
 		this.timedBuffer = [];
 		this.delayBuffer = [];
 		this.totalLength = 0;
+
 		this.chunkAddCount = 0;
 		this.relayCount = 0;
 		this.ID = 0;
 		this.paused = false;
 	}
 
-	setState(state) {
-		this.STATE = state;
-	}
-
-	setStreamDelayMs(ms) {
-		this.STREAM_DELAY_MS = ms;
-	}
-
-	setMaxBufferChunks(chunks) {
-		this.MAX_BUFFER_CHUNKS = chunks;
-	}
-
-	setMaxBufferBytes(bytes) {
-		this.MAX_BUFFER_BYTES = bytes;
+	formatBytes(bytes) {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 	}
 
 	pushToBuffer(chunk, clientSocket) {
@@ -48,16 +28,16 @@ export class StreamBuffer {
 		this.timedBuffer.push({ chunk, time: now, id: this.ID++ });
 		this.totalLength += chunk.length;
 		this.chunkAddCount++;
-		if (this.chunkAddCount % this.LOG_EVERY === 0) {
+		if (this.chunkAddCount % LOG_EVERY === 0) {
 			LOGGER.info(`[Buffer] Added ${this.chunkAddCount} chunks so far`);
 			LOGGER.info(`[Buffer] timedBuffer: ${this.timedBuffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
 		}
 		// Memory management: pause or drop
-		if (this.timedBuffer.length > this.MAX_BUFFER_CHUNKS || this.totalLength > this.MAX_BUFFER_BYTES) {
+		if (this.timedBuffer.length > config.MAX_BUFFER_CHUNKS || this.totalLength > config.MAX_BUFFER_BYTES) {
 			if (typeof clientSocket.pause === 'function' && !this.paused) {
 				clientSocket.pause();
 				this.paused = true;
-				if (this.STATE !== 'BUFFERING') {
+				if (config.STATE !== 'BUFFERING') {
 					LOGGER.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
 				} else {
 					LOGGER.warn(`[Memory] Buffer limit reached while buffering. Pausing OBS input. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
@@ -68,7 +48,7 @@ export class StreamBuffer {
 				if (dropped) this.totalLength -= dropped.chunk.length;
 				LOGGER.warn(`[Memory] Buffer overflow! Dropped oldest chunk. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
 			}
-		} else if (this.paused && this.timedBuffer.length < this.MAX_BUFFER_CHUNKS * 0.8 && this.totalLength < this.MAX_BUFFER_BYTES * 0.8) {
+		} else if (this.paused && this.timedBuffer.length < config.MAX_BUFFER_CHUNKS * 0.8 && this.totalLength < config.MAX_BUFFER_BYTES * 0.8) {
 			// Resume if buffer is below 80% of limit
 			if (typeof clientSocket.resume === 'function') {
 				clientSocket.resume();
@@ -85,41 +65,39 @@ export class StreamBuffer {
 	popReadyChunks() {
 		const ready = [];
 		const now = Date.now();
-		if (this.STATE === 'FORWARDING') {
+		if (config.STATE === 'FORWARDING') {
 			while (this.timedBuffer.length > 0) {
 				const buf = this.timedBuffer.shift();
 				this.totalLength -= buf.chunk.length;
 			}
-			this.STATE = 'REALTIME';
-		} else if (this.STATE === 'REALTIME') {
+			config.STATE = 'REALTIME';
+		} else if (config.STATE === 'REALTIME') {
 			while (this.timedBuffer.length > 0) {
 				const buf = this.timedBuffer.shift();
 				ready.push(buf);
 				this.delayBuffer.push(buf);
 				this.totalLength -= buf.chunk.length;
 			}
-			while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > this.STREAM_DELAY_MS) {
+			while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
 				this.delayBuffer.shift();
 			}
-		} else if (this.STATE === 'DELAY') {
-			while (this.timedBuffer.length > 0 && now - this.timedBuffer[0].time > this.STREAM_DELAY_MS) {
+		} else if (config.STATE === 'DELAY') {
+			while (this.timedBuffer.length > 0 && now - this.timedBuffer[0].time > config.STREAM_DELAY_MS) {
 				const buf = this.timedBuffer.shift();
 				ready.push(buf);
 				this.totalLength -= buf.chunk.length;
 			}
-		} else if (this.STATE === 'BUFFERING') {
-			while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > this.STREAM_DELAY_MS) {
+		} else if (config.STATE === 'BUFFERING') {
+			while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
 				const buf = this.delayBuffer.shift();
 				ready.push(buf);
 			}
-			if (this.delayBuffer.length === 0) this.STATE = 'DELAY';
+			if (this.delayBuffer.length === 0) config.STATE = 'DELAY';
 		}
 		this.relayCount += ready.length;
-		if (this.relayCount % this.LOG_EVERY === 0) {
-			LOGGER.info(`[Relay] Relayed ${ready.length}/${this.relayCount} chunk(s) to Twitch (${this.formatBytes(this.totalLength)} left in buffer)`);
-			LOGGER.info(`[Buffer] timedBuffer: ${this.timedBuffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
-		}
-		if (ready.length > 25) {
+		if (this.relayCount % LOG_EVERY === 0) {
+			LOGGER.info(`[Relay] Relayed ${ready.length}/${this.relayCount} chunks so far`);
+		} else if (ready.length > 25) {
 			LOGGER.warn(`[Relay] [WARNING] Sending ${ready.length} chunks to Twitch at once!`);
 		}
 		return ready;

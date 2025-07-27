@@ -1,4 +1,4 @@
-const NodeMediaServer = require('node-media-server');
+import NodeMediaServer from 'node-media-server';
 
 /** @type {import("node-media-server").Config} */
 const config = {

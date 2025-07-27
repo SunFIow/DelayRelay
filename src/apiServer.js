@@ -2,12 +2,14 @@ import http from 'http';
 
 import { LOGGER, LOGGER_API } from './logger.js';
 
+const HTTP_API_PORT = 8080;
+
+import { config } from './config.js';
+
 export class ApiServer {
-	constructor({ port, getConfig, setConfig }) {
-		this.port = port;
-		this.getConfig = getConfig;
-		this.setConfig = setConfig;
-		this.server = http.createServer(this.requestHandler.bind(this));
+	constructor() {
+		this.port = HTTP_API_PORT;
+		this.server = http.createServer((req, res) => this.requestHandler(req, res));
 		this.server.listen(this.port, () => {
 			LOGGER_API.info(`HTTP API listening on http://localhost:${this.port}`);
 			LOGGER.info(`HTTP API listening on http://localhost:${this.port}`);
@@ -50,7 +52,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
-				this.setConfig('LOCAL_PORT', portVal);
+				config.LOCAL_PORT = portVal;
 				LOGGER_API.info(`Local port set to ${portVal}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Local port set to ${portVal}\n`);
@@ -65,7 +67,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const ms = parseInt(url.searchParams.get('ms'), 10);
 			if (!isNaN(ms) && ms > 0) {
-				this.setConfig('STREAM_DELAY_MS', ms);
+				config.STREAM_DELAY_MS = ms;
 				LOGGER_API.info(`Stream delay set to ${ms} ms (${(ms / 1000).toFixed(2)}s)`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Stream delay set to ${ms} ms\n`);
@@ -77,7 +79,7 @@ export class ApiServer {
 		}
 		// /activate-delay
 		if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
-			this.setConfig('STATE', 'BUFFERING');
+			config.STATE = 'BUFFERING';
 			LOGGER_API.info(`Delay activated`);
 			LOGGER.info(`Delay activated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -86,7 +88,7 @@ export class ApiServer {
 		}
 		// /deactivate-delay
 		if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-			this.setConfig('STATE', 'FORWARDING');
+			config.STATE = 'FORWARDING';
 			LOGGER_API.info(`Delay deactivated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay deactivated\n`);
@@ -97,7 +99,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const remoteUrl = url.searchParams.get('url');
 			if (remoteUrl) {
-				this.setConfig('REMOTE_RTMP_URL', remoteUrl);
+				config.REMOTE_RTMP_URL = remoteUrl;
 				LOGGER_API.info(`Remote RTMP URL set to ${remoteUrl}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Remote RTMP URL set to ${remoteUrl}\n`);
@@ -112,7 +114,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
-				this.setConfig('REMOTE_RTMP_PORT', portVal);
+				config.REMOTE_RTMP_PORT = portVal;
 				LOGGER_API.info(`Twitch RTMP port set to ${portVal}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Twitch RTMP port set to ${portVal}\n`);
@@ -127,7 +129,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const latency = parseInt(url.searchParams.get('ms'), 10);
 			if (!isNaN(latency) && latency > 0) {
-				this.setConfig('LATENCY_INTERVAL', latency);
+				config.LATENCY_INTERVAL = latency;
 				LOGGER_API.info(`Latency interval set to ${latency} ms`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Latency interval set to ${latency} ms\n`);
@@ -142,7 +144,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const chunks = parseInt(url.searchParams.get('chunks'), 10);
 			if (!isNaN(chunks) && chunks > 0) {
-				this.setConfig('MAX_BUFFER_CHUNKS', chunks);
+				config.MAX_BUFFER_CHUNKS = chunks;
 				LOGGER_API.info(`Max buffer chunks set to ${chunks}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Max buffer chunks set to ${chunks}\n`);
@@ -157,7 +159,7 @@ export class ApiServer {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const bytes = parseInt(url.searchParams.get('bytes'), 10);
 			if (!isNaN(bytes) && bytes > 0) {
-				this.setConfig('MAX_BUFFER_BYTES', bytes);
+				config.MAX_BUFFER_BYTES = bytes;
 				LOGGER_API.info(`Max buffer bytes set to ${bytes}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
 				res.end(`Max buffer bytes set to ${bytes}\n`);
@@ -169,7 +171,6 @@ export class ApiServer {
 		}
 		// /status
 		if (req.method === 'GET' && req.url === '/status') {
-			const config = this.getConfig();
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
