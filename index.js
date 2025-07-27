@@ -44,8 +44,8 @@ function logToApiFile(level, message) {
 
 // Configuration
 let LOCAL_PORT = 8888; // RTMP default port
-let STREAM_DELAY_MS = 30_000; // 10 seconds delay
-/**@type {"REALTIME" | "BUFFERING" | "DELAY"} */
+let STREAM_DELAY_MS = 30_000; // 30 seconds delay
+/**@type {"REALTIME" | "BUFFERING" | "DELAY" | "FORWARDING"} */
 let STATE = 'REALTIME'; // Whether to apply the delay
 
 // let REMOTE_RTMP_URL = 'live.twitch.tv'; // Twitch RTMP URL
@@ -111,7 +111,7 @@ const handleActivateDelay = (req, res) => {
 
 const handleDeactivateDelay = (req, res) => {
 	if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-		STATE = 'REALTIME';
+		STATE = 'FORWARDING'; // Stop buffering and forward immediately
 		logToApiFile('INFO', `Delay deactivated`);
 		res.writeHead(200, { 'Content-Type': 'text/plain' });
 		res.end(`Delay deactivated\n`);
@@ -375,7 +375,14 @@ const server = net.createServer(clientSocket => {
 	function popReadyChunks(ready = []) {
 		const now = Date.now();
 
-		if (STATE === 'REALTIME') {
+		if (STATE === 'FORWARDING') {
+			// If in FORWARDING state drop all delayed chunks
+			while (timedBuffer.length > 0) {
+				const buf = timedBuffer.shift();
+				totalLength -= buf.chunk.length;
+			}
+			STATE = 'REALTIME'; // Reset state to REALTIME after forwarding
+		} else if (STATE === 'REALTIME') {
 			while (timedBuffer.length > 0) {
 				const buf = timedBuffer.shift();
 				ready.push(buf);
@@ -404,8 +411,8 @@ const server = net.createServer(clientSocket => {
 			logToFile('INFO', `[Relay] Relayed ${ready.length}/${relayCount} chunk(s) to Twitch (${formatBytes(totalLength)} left in buffer)`);
 			logToFile('INFO', `[Buffer] timedBuffer: ${timedBuffer.length} chunks, ${formatBytes(totalLength)} | delayBuffer: ${delayBuffer.length} chunks`);
 		}
-		// Warn if we send more than 10 chunks at once
-		if (ready.length > 10) {
+		// Warn if we send more than 25 chunks at once
+		if (ready.length > 25) {
 			logToFile('WARN', `[Relay] [WARNING] Sending ${ready.length} chunks to Twitch at once!`);
 		}
 
