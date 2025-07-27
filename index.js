@@ -62,224 +62,34 @@ const HTTP_API_PORT = 8080; // Port for the HTTP API
 
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
-const handleLocalPort = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-local-port')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const port = parseInt(url.searchParams.get('port'), 10);
-		if (!isNaN(port) && port > 0 && port < 65536) {
-			LOCAL_PORT = port;
-			logToApiFile('INFO', `Local port set to ${LOCAL_PORT}`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Local port set to ${LOCAL_PORT}\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid port parameter. Usage: "/set-local-port?port=1935"\n');
-		}
-		return true;
-	}
-};
+// Extracted HTTP API server (handlers are now in apiServer.js)
+const createApiServer = require('./apiServer');
 
-const handleStreamDelay = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-delay')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const ms = parseInt(url.searchParams.get('ms'), 10);
-		if (!isNaN(ms) && ms > 0) {
-			STREAM_DELAY_MS = ms;
-			logToApiFile('INFO', `Stream delay set to ${STREAM_DELAY_MS} ms (${(STREAM_DELAY_MS / 1000).toFixed(2)}s)`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Stream delay set to ${STREAM_DELAY_MS} ms\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid ms parameter. Usage: "/set-delay?ms=15000" (for 15s)\n');
-		}
-		return true;
-	}
-	return false;
-};
-
-const handleActivateDelay = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
-		STATE = 'BUFFERING'; // Start buffering to build up delay
-		logToApiFile('INFO', `Delay activated`);
-		logToFile('INFO', `Delay activated`);
-		res.writeHead(200, { 'Content-Type': 'text/plain' });
-		res.end(`Delay activated\n`);
-		return true;
-	}
-	return false;
-};
-
-const handleDeactivateDelay = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-		STATE = 'FORWARDING'; // Stop buffering and forward immediately
-		logToApiFile('INFO', `Delay deactivated`);
-		res.writeHead(200, { 'Content-Type': 'text/plain' });
-		res.end(`Delay deactivated\n`);
-		return true;
-	}
-	return false;
-};
-
-const handleRemoteUrl = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-remote-url')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const remoteUrl = url.searchParams.get('url');
-		if (remoteUrl) {
-			REMOTE_RTMP_URL = remoteUrl;
-			logToApiFile('INFO', `Remote RTMP URL set to ${REMOTE_RTMP_URL}`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Remote RTMP URL set to ${REMOTE_RTMP_URL}\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid url parameter. Usage: "/set-remote-url?url=live.twitch.tv"\n');
-		}
-		return true;
-	}
-	return false;
-};
-
-const handleRemoteRTMPPort = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-rtmp-port')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const port = parseInt(url.searchParams.get('port'), 10);
-		if (!isNaN(port) && port > 0 && port < 65536) {
-			REMOTE_RTMP_PORT = port;
-			logToApiFile('INFO', `Twitch RTMP port set to ${REMOTE_RTMP_PORT}`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Twitch RTMP port set to ${REMOTE_RTMP_PORT}\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid port parameter. Usage: "/set-rtmp-port?port=1935"\n');
-		}
-		return true;
-	}
-	return false;
-};
-
-const handleLatency = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-latency')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const latency = parseInt(url.searchParams.get('ms'), 10);
-		if (!isNaN(latency) && latency > 0) {
-			LATENCY_INTERVAL = latency;
-			logToApiFile('INFO', `Latency interval set to ${LATENCY_INTERVAL} ms`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Latency interval set to ${LATENCY_INTERVAL} ms\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid ms parameter. Usage: "/set-latency?ms=10"\n');
-		}
-		return true;
-	}
-	return false;
-};
-
-const handleMaxBufferChunks = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-max-chunks')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const chunks = parseInt(url.searchParams.get('chunks'), 10);
-		if (!isNaN(chunks) && chunks > 0) {
-			MAX_BUFFER_CHUNKS = chunks;
-			logToApiFile('INFO', `Max buffer chunks set to ${MAX_BUFFER_CHUNKS}`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Max buffer chunks set to ${MAX_BUFFER_CHUNKS}\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid chunks parameter. Usage: "/set-max-chunks?chunks=10000"\n');
-		}
-		return true;
-	}
-	return false;
-};
-
-const handleMaxBufferBytes = (req, res) => {
-	if (req.method === 'GET' && req.url.startsWith('/set-max-bytes')) {
-		const url = new URL(req.url, `http://${req.headers.host}`);
-		const bytes = parseInt(url.searchParams.get('bytes'), 10);
-		if (!isNaN(bytes) && bytes > 0) {
-			MAX_BUFFER_BYTES = bytes;
-			logToApiFile('INFO', `Max buffer bytes set to ${MAX_BUFFER_BYTES}`);
-			res.writeHead(200, { 'Content-Type': 'text/plain' });
-			res.end(`Max buffer bytes set to ${MAX_BUFFER_BYTES}\n`);
-		} else {
-			res.writeHead(400, { 'Content-Type': 'text/plain' });
-			res.end('Invalid bytes parameter. Usage: "/set-max-bytes?bytes=52428800"\n');
-		}
-		return true;
-	}
-	return false;
-};
-
-const handleStatus = (req, res) => {
-	if (req.method === 'GET' && req.url === '/status') {
-		res.writeHead(200, { 'Content-Type': 'application/json' });
-		const status = {
-			localPort: LOCAL_PORT,
-			streamDelay: STREAM_DELAY_MS,
-			state: STATE,
-			remoteUrl: REMOTE_RTMP_URL,
-			remotePort: REMOTE_RTMP_PORT,
-			latencyInterval: LATENCY_INTERVAL,
-			maxBufferChunks: MAX_BUFFER_CHUNKS,
-			maxBufferBytes: MAX_BUFFER_BYTES
-		};
-		res.end(JSON.stringify(status));
-		return true;
-	}
-
-	return false;
-};
-
-const apiServer = http.createServer((req, res) => {
-	// res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS for API
-	// res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-
-	if (handleLocalPort(req, res)) return;
-	if (handleStreamDelay(req, res)) return;
-	if (handleActivateDelay(req, res)) return;
-	if (handleDeactivateDelay(req, res)) return;
-	if (handleRemoteUrl(req, res)) return;
-	if (handleRemoteRTMPPort(req, res)) return;
-	if (handleLatency(req, res)) return;
-	if (handleMaxBufferChunks(req, res)) return;
-	if (handleMaxBufferBytes(req, res)) return;
-	if (handleStatus(req, res)) return;
-
-	// If no handlers responded, return a simple homepage
-	simplePage(req, res);
+createApiServer({
+	port: HTTP_API_PORT,
+	getConfig: () => ({
+		LOCAL_PORT,
+		STREAM_DELAY_MS,
+		STATE,
+		REMOTE_RTMP_URL,
+		REMOTE_RTMP_PORT,
+		LATENCY_INTERVAL,
+		MAX_BUFFER_CHUNKS,
+		MAX_BUFFER_BYTES
+	}),
+	setConfig: (key, value) => {
+		if (key === 'LOCAL_PORT') LOCAL_PORT = value;
+		if (key === 'STREAM_DELAY_MS') STREAM_DELAY_MS = value;
+		if (key === 'STATE') STATE = value;
+		if (key === 'REMOTE_RTMP_URL') REMOTE_RTMP_URL = value;
+		if (key === 'REMOTE_RTMP_PORT') REMOTE_RTMP_PORT = value;
+		if (key === 'LATENCY_INTERVAL') LATENCY_INTERVAL = value;
+		if (key === 'MAX_BUFFER_CHUNKS') MAX_BUFFER_CHUNKS = value;
+		if (key === 'MAX_BUFFER_BYTES') MAX_BUFFER_BYTES = value;
+	},
+	logToApiFile,
+	logToFile
 });
-apiServer.listen(HTTP_API_PORT, () => {
-	console.log(`HTTP API listening on http://localhost:${HTTP_API_PORT}`);
-	logToApiFile('INFO', `HTTP API listening on http://localhost:${HTTP_API_PORT}`);
-});
-
-function simplePage(req, res) {
-	res.writeHead(200, { 'Content-Type': 'text/html' });
-	res.end(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>RTMP Delay Relay</title>
-		</head>
-		<body>
-			<h1>RTMP Delay Relay</h1>
-			<p>API is running. Use the endpoints to control the proxy.</p>
-			<ul>
-				<li><a href="/status">Status</a></li>
-				<li><a href="/set-local-port?port=8888">Set Local Port</a></li>
-				<li><a href="/set-delay?ms=10000">Set Stream Delay</a></li>
-				<li><a href="/activate-delay">Activate Delay</a></li>
-				<li><a href="/deactivate-delay">Deactivate Delay</a></li>
-				<li><a href="/set-remote-url?url=live.twitch.tv">Set Remote RTMP URL</a></li>
-				<li><a href="/set-rtmp-port?port=1935">Set Remote RTMP Port</a></li>
-				<li><a href="/set-latency?ms=10">Set Latency Interval</a></li>
-				<li><a href="/set-max-chunks?chunks=10000">Set Max Buffer Chunks</a></li>
-				<li><a href="/set-max-bytes?bytes=52428800">Set Max Buffer Bytes</a></li>
-			</ul>
-		</body>
-		</html>
-	`);
-}
 
 // Modular buffer logic using StreamBuffer
 const StreamBuffer = require('./streamBuffer');
