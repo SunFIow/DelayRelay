@@ -1,24 +1,66 @@
 const net = require('net');
 const http = require('http');
 const fs = require('fs');
+const AVPacket = require('node-media-server/src/core/avpacket');
+
+// Simple file loggers
+const LOG_DIR = 'logs';
+const d = new Date();
+function getLogFilename(prefix) {
+	const pad = n => n.toString().padStart(2, '0');
+	// Format: YYYYMMDD_HHMMSS
+	const ts = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}__${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+	return `${LOG_DIR}/${prefix}_${ts}.log`;
+}
+const LOG_FILE = getLogFilename('relay');
+const API_LOG_FILE = getLogFilename('api');
+const LOG_LATEST = `${LOG_DIR}/relay_latest.log`;
+const API_LOG_LATEST = `${LOG_DIR}/api_latest.log`;
+// Truncate latest log files at startup
+fs.writeFileSync(LOG_LATEST, '');
+fs.writeFileSync(API_LOG_LATEST, '');
+
+const LOG_STREAM = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+const API_LOG_STREAM = fs.createWriteStream(API_LOG_FILE, { flags: 'a' });
+const LOG_LATEST_STREAM = fs.createWriteStream(LOG_LATEST, { flags: 'a' });
+const API_LOG_LATEST_STREAM = fs.createWriteStream(API_LOG_LATEST, { flags: 'a' });
+function getTimeString() {
+	const d = new Date();
+	const pad = n => n.toString().padStart(2, '0');
+	return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function logToFile(level, message) {
+	const timestamp = getTimeString();
+	const line = `[${timestamp}] [${level}] ${message}\n`;
+	LOG_STREAM.write(line);
+	LOG_LATEST_STREAM.write(line);
+}
+function logToApiFile(level, message) {
+	const timestamp = getTimeString();
+	const line = `[${timestamp}] [${level}] ${message}\n`;
+	API_LOG_STREAM.write(line);
+	API_LOG_LATEST_STREAM.write(line);
+}
 
 // Configuration
-let LOCAL_PORT = 1935; // RTMP default port
-let STREAM_DELAY_MS = 10_000; // 10 seconds delay
+let LOCAL_PORT = 8888; // RTMP default port
+let STREAM_DELAY_MS = 30_000; // 10 seconds delay
 /**@type {"REALTIME" | "BUFFERING" | "DELAY"} */
-let state = 'REALTIME'; // Whether to apply the delay
+let STATE = 'REALTIME'; // Whether to apply the delay
 
-let REMOTE_RTMP_URL = 'live.twitch.tv'; // Twitch RTMP URL
-let REMOTE_RTMP_PORT = 1935; // Twitch RTMP port
-// let REMOTE_RTMP_URL = 'localhost'; // Dummy RTMP server for testing
-// let REMOTE_RTMP_PORT = 9999; // Dummy RTMP port for testing
-
+// let REMOTE_RTMP_URL = 'live.twitch.tv'; // Twitch RTMP URL
+// let REMOTE_RTMP_PORT = 1935; // Twitch RTMP port
+let REMOTE_RTMP_URL = 'localhost'; // Dummy RTMP server for testing
+let REMOTE_RTMP_PORT = 9999; // Dummy RTMP port for testing
+// http://localhost:8081/app/live_157072648_HXdnAA0L7kzXUcsU8OOlIOB9rsQxqE.flv
 let LATENCY_INTERVAL = 10; // Check every 10ms for low latency
-let MAX_BUFFER_CHUNKS = 10_000; // Max number of chunks in buffer
-let MAX_BUFFER_BYTES = 50 * 1024 * 1024; // 50 MB max buffer size
+let MAX_BUFFER_BYTES = 1 * 1024 * 1024 * 1024; // 1 GB max buffer size
+let MAX_BUFFER_CHUNKS = MAX_BUFFER_BYTES / 6000; // Max number of chunks in buffer
 
 // Simple HTTP API for dynamic delay adjustment
 const HTTP_API_PORT = 8080; // Port for the HTTP API
+
+const LOG_EVERY = 100; // Log every 100 chunks for performance
 
 const handleLocalPort = (req, res) => {
 	if (req.method === 'GET' && req.url.startsWith('/set-local-port')) {
@@ -26,7 +68,7 @@ const handleLocalPort = (req, res) => {
 		const port = parseInt(url.searchParams.get('port'), 10);
 		if (!isNaN(port) && port > 0 && port < 65536) {
 			LOCAL_PORT = port;
-			console.log(`[API] Local port set to ${LOCAL_PORT}`);
+			logToApiFile('INFO', `Local port set to ${LOCAL_PORT}`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Local port set to ${LOCAL_PORT}\n`);
 		} else {
@@ -43,7 +85,7 @@ const handleStreamDelay = (req, res) => {
 		const ms = parseInt(url.searchParams.get('ms'), 10);
 		if (!isNaN(ms) && ms > 0) {
 			STREAM_DELAY_MS = ms;
-			console.log(`[API] Stream delay set to ${STREAM_DELAY_MS} ms (${(STREAM_DELAY_MS / 1000).toFixed(2)}s)`);
+			logToApiFile('INFO', `Stream delay set to ${STREAM_DELAY_MS} ms (${(STREAM_DELAY_MS / 1000).toFixed(2)}s)`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Stream delay set to ${STREAM_DELAY_MS} ms\n`);
 		} else {
@@ -57,8 +99,9 @@ const handleStreamDelay = (req, res) => {
 
 const handleActivateDelay = (req, res) => {
 	if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
-		state = 'BUILD_UP_DELAY';
-		console.log(`[API] Delay activated`);
+		STATE = 'BUFFERING'; // Start buffering to build up delay
+		logToApiFile('INFO', `Delay activated`);
+		logToFile('INFO', `Delay activated`);
 		res.writeHead(200, { 'Content-Type': 'text/plain' });
 		res.end(`Delay activated\n`);
 		return true;
@@ -68,8 +111,8 @@ const handleActivateDelay = (req, res) => {
 
 const handleDeactivateDelay = (req, res) => {
 	if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-		state = 'REALTIME';
-		console.log(`[API] Delay deactivated`);
+		STATE = 'REALTIME';
+		logToApiFile('INFO', `Delay deactivated`);
 		res.writeHead(200, { 'Content-Type': 'text/plain' });
 		res.end(`Delay deactivated\n`);
 		return true;
@@ -83,7 +126,7 @@ const handleRemoteUrl = (req, res) => {
 		const remoteUrl = url.searchParams.get('url');
 		if (remoteUrl) {
 			REMOTE_RTMP_URL = remoteUrl;
-			console.log(`[API] Remote RTMP URL set to ${REMOTE_RTMP_URL}`);
+			logToApiFile('INFO', `Remote RTMP URL set to ${REMOTE_RTMP_URL}`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Remote RTMP URL set to ${REMOTE_RTMP_URL}\n`);
 		} else {
@@ -101,7 +144,7 @@ const handleRemoteRTMPPort = (req, res) => {
 		const port = parseInt(url.searchParams.get('port'), 10);
 		if (!isNaN(port) && port > 0 && port < 65536) {
 			REMOTE_RTMP_PORT = port;
-			console.log(`[API] Twitch RTMP port set to ${REMOTE_RTMP_PORT}`);
+			logToApiFile('INFO', `Twitch RTMP port set to ${REMOTE_RTMP_PORT}`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Twitch RTMP port set to ${REMOTE_RTMP_PORT}\n`);
 		} else {
@@ -119,7 +162,7 @@ const handleLatency = (req, res) => {
 		const latency = parseInt(url.searchParams.get('ms'), 10);
 		if (!isNaN(latency) && latency > 0) {
 			LATENCY_INTERVAL = latency;
-			console.log(`[API] Latency interval set to ${LATENCY_INTERVAL} ms`);
+			logToApiFile('INFO', `Latency interval set to ${LATENCY_INTERVAL} ms`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Latency interval set to ${LATENCY_INTERVAL} ms\n`);
 		} else {
@@ -137,7 +180,7 @@ const handleMaxBufferChunks = (req, res) => {
 		const chunks = parseInt(url.searchParams.get('chunks'), 10);
 		if (!isNaN(chunks) && chunks > 0) {
 			MAX_BUFFER_CHUNKS = chunks;
-			console.log(`[API] Max buffer chunks set to ${MAX_BUFFER_CHUNKS}`);
+			logToApiFile('INFO', `Max buffer chunks set to ${MAX_BUFFER_CHUNKS}`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Max buffer chunks set to ${MAX_BUFFER_CHUNKS}\n`);
 		} else {
@@ -155,7 +198,7 @@ const handleMaxBufferBytes = (req, res) => {
 		const bytes = parseInt(url.searchParams.get('bytes'), 10);
 		if (!isNaN(bytes) && bytes > 0) {
 			MAX_BUFFER_BYTES = bytes;
-			console.log(`[API] Max buffer bytes set to ${MAX_BUFFER_BYTES}`);
+			logToApiFile('INFO', `Max buffer bytes set to ${MAX_BUFFER_BYTES}`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Max buffer bytes set to ${MAX_BUFFER_BYTES}\n`);
 		} else {
@@ -173,7 +216,7 @@ const handleStatus = (req, res) => {
 		const status = {
 			localPort: LOCAL_PORT,
 			streamDelay: STREAM_DELAY_MS,
-			state: state,
+			state: STATE,
 			remoteUrl: REMOTE_RTMP_URL,
 			remotePort: REMOTE_RTMP_PORT,
 			latencyInterval: LATENCY_INTERVAL,
@@ -206,7 +249,8 @@ const apiServer = http.createServer((req, res) => {
 	simplePage(req, res);
 });
 apiServer.listen(HTTP_API_PORT, () => {
-	console.log(`[API] HTTP API listening on http://localhost:${HTTP_API_PORT}`);
+	console.log(`HTTP API listening on http://localhost:${HTTP_API_PORT}`);
+	logToApiFile('INFO', `HTTP API listening on http://localhost:${HTTP_API_PORT}`);
 });
 
 function simplePage(req, res) {
@@ -220,6 +264,18 @@ function simplePage(req, res) {
 		<body>
 			<h1>RTMP Delay Relay</h1>
 			<p>API is running. Use the endpoints to control the proxy.</p>
+			<ul>
+				<li><a href="/status">Status</a></li>
+				<li><a href="/set-local-port?port=8888">Set Local Port</a></li>
+				<li><a href="/set-delay?ms=10000">Set Stream Delay</a></li>
+				<li><a href="/activate-delay">Activate Delay</a></li>
+				<li><a href="/deactivate-delay">Deactivate Delay</a></li>
+				<li><a href="/set-remote-url?url=live.twitch.tv">Set Remote RTMP URL</a></li>
+				<li><a href="/set-rtmp-port?port=1935">Set Remote RTMP Port</a></li>
+				<li><a href="/set-latency?ms=10">Set Latency Interval</a></li>
+				<li><a href="/set-max-chunks?chunks=10000">Set Max Buffer Chunks</a></li>
+				<li><a href="/set-max-bytes?bytes=52428800">Set Max Buffer Bytes</a></li>
+			</ul>
 		</body>
 		</html>
 	`);
@@ -231,139 +287,245 @@ const server = net.createServer(clientSocket => {
 
 	// Connect to Twitch immediately
 	const twitchSocket = net.connect(REMOTE_RTMP_PORT, REMOTE_RTMP_URL, () => {
-		console.log(`[Connect] Connected to Twitch for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+		logToFile('INFO', `[Connect] Connected to Twitch for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
 		// Pipe Twitch responses back to OBS (optional)
 		twitchSocket.pipe(clientSocket);
 	});
 	twitchSocket.setNoDelay(true); // Disable Nagle's algorithm for low latency
 
 	twitchSocket.on('error', err => {
-		console.error(`[Error] Twitch socket error: ${err.message}`);
+		logToFile('ERROR', `Twitch socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
+		logToFile('ERROR', `Current state: ${STATE}`);
+		logToFile('ERROR', `Relay count: ${relayCount}, Chunk add count: ${chunkAddCount}`);
+		logToFile('ERROR', `Total buffer size: ${formatBytes(totalLength)}, Chunks in buffer: ${timedBuffer.length}`);
+		logToFile('ERROR', `Delayed chunks: ${delayBuffer.length}`);
+		// check timedBuffer / delayedBuffer etc
+		clientSocket.end(); // Close OBS client socket on error
 	});
-	twitchSocket.on('close', () => {
-		console.log(`[Disconnect] Twitch socket closed for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+	twitchSocket.on('close', err => {
+		if (err) logToFile('ERROR', `[Disconnect] Twitch socket closed with error: ${err}`);
+		else logToFile('INFO', `[Disconnect] Twitch socket closed for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+		clientSocket.end(); // Close OBS client socket if Twitch disconnects
 	});
 
 	let ended = false;
 
 	// Timed buffer for continuous delay
+	const delayBuffer = [];
 	const timedBuffer = [];
 	let totalLength = 0;
 
 	// Helper: push chunk with timestamp, with memory management
 	let chunkAddCount = 0;
 	let paused = false;
+	/**
+	 * Push a chunk to the buffer with its timestamp and size.
+	 * @param {Buffer} buffer
+	 * @param {number} inChunkSize
+	 */
+	function handleData(buffer, inChunkSize) {
+		while (buffer.length >= inChunkSize) {
+			const completeChunk = buffer.slice(0, inChunkSize); // Get complete chunk
+			buffer = buffer.slice(inChunkSize); // Remove complete chunk from buffer
+			pushToBuffer(completeChunk);
+		}
+		// If there's still data left, push it as a partial chunk
+		if (buffer.length > 0) pushToBuffer(buffer);
+	}
+
+	let ID = 0; // Unique ID for each chunk
 	function pushToBuffer(chunk) {
+		// TODO: Use inChunkSize to manage buffer size
 		const now = Date.now();
-		timedBuffer.push({ chunk, time: now });
+		timedBuffer.push({ chunk, time: now, id: ID++ });
 		totalLength += chunk.length;
 		chunkAddCount++;
-		if (chunkAddCount % 100 === 0) {
-			console.log(`[Buffer] Added ${chunkAddCount} chunks so far. Current buffer: ${timedBuffer.length} chunks, ${totalLength} bytes`);
+		if (chunkAddCount % LOG_EVERY === 0) {
+			logToFile('INFO', `[Buffer] Added ${chunkAddCount} chunks so far`);
+			logToFile('INFO', `[Buffer] timedBuffer: ${timedBuffer.length} chunks, ${formatBytes(totalLength)} | delayBuffer: ${delayBuffer.length} chunks`);
 		}
 		// Memory management: pause or drop
 		if (timedBuffer.length > MAX_BUFFER_CHUNKS || totalLength > MAX_BUFFER_BYTES) {
 			if (typeof clientSocket.pause === 'function' && !paused) {
 				clientSocket.pause();
 				paused = true;
-				console.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${timedBuffer.length} chunks, ${totalLength} bytes`);
+				if (STATE !== 'BUFFERING') {
+					logToFile('WARN', `[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${timedBuffer.length} chunks, ${totalLength} bytes`);
+				} else {
+					logToFile('WARN', `[Memory] Buffer limit reached while buffering. Pausing OBS input. And  Buffer: ${timedBuffer.length} chunks, ${totalLength} bytes`);
+				}
 			} else {
 				// Drop oldest chunk
 				const dropped = timedBuffer.shift();
 				if (dropped) totalLength -= dropped.chunk.length;
-				console.warn(`[Memory] Buffer overflow! Dropped oldest chunk. Buffer: ${timedBuffer.length} chunks, ${totalLength} bytes`);
+				logToFile('WARN', `[Memory] Buffer overflow! Dropped oldest chunk. Buffer: ${timedBuffer.length} chunks, ${totalLength} bytes`);
 			}
 		} else if (paused && timedBuffer.length < MAX_BUFFER_CHUNKS * 0.8 && totalLength < MAX_BUFFER_BYTES * 0.8) {
 			// Resume if buffer is below 80% of limit
 			if (typeof clientSocket.resume === 'function') {
 				clientSocket.resume();
 				paused = false;
-				console.log(`[Memory] Buffer below threshold. Resumed OBS input.`);
+				logToFile('INFO', `[Memory] Buffer below threshold. Resumed OBS input.`);
 			}
 		}
 	}
 
 	// Helper: pop and return all chunks older than delay
-	function popDelayedChunks() {
-		const STREAM_DELAY_MS = state === 'REALTIME' ? 0 : STREAM_DELAY_MS; // Use configured delay if active
+	let relayCount = 0;
+	function popReadyChunks(ready = []) {
 		const now = Date.now();
-		const ready = [];
-		while (timedBuffer.length && now - timedBuffer[0].time >= STREAM_DELAY_MS) {
-			const { chunk } = timedBuffer.shift();
-			ready.push(chunk);
-			totalLength -= chunk.length;
+
+		if (STATE === 'REALTIME') {
+			while (timedBuffer.length > 0) {
+				const buf = timedBuffer.shift();
+				ready.push(buf);
+				delayBuffer.push(buf);
+				totalLength -= buf.chunk.length;
+			}
+			while (delayBuffer.length > 0 && now - delayBuffer[0].time > STREAM_DELAY_MS) {
+				delayBuffer.shift();
+			}
+		} else if (STATE === 'DELAY') {
+			while (timedBuffer.length > 0 && now - timedBuffer[0].time > STREAM_DELAY_MS) {
+				const buf = timedBuffer.shift();
+				ready.push(buf);
+				totalLength -= buf.chunk.length;
+			}
+		} else if (STATE === 'BUFFERING') {
+			while (delayBuffer.length > 0 && now - delayBuffer[0].time > STREAM_DELAY_MS) {
+				const buf = delayBuffer.shift();
+				ready.push(buf);
+			}
+			if (delayBuffer.length === 0) STATE = 'DELAY'; // Switch to DELAY state after buffering
 		}
-		if (ready.length > 0) {
-			console.log(`[Relay] Relaying ${ready.length} chunk(s) to Twitch (${totalLength} bytes left in buffer)`);
+
+		relayCount += ready.length;
+		if (relayCount % LOG_EVERY === 0) {
+			logToFile('INFO', `[Relay] Relayed ${ready.length}/${relayCount} chunk(s) to Twitch (${formatBytes(totalLength)} left in buffer)`);
+			logToFile('INFO', `[Buffer] timedBuffer: ${timedBuffer.length} chunks, ${formatBytes(totalLength)} | delayBuffer: ${delayBuffer.length} chunks`);
 		}
+		// Warn if we send more than 10 chunks at once
+		if (ready.length > 10) {
+			logToFile('WARN', `[Relay] [WARNING] Sending ${ready.length} chunks to Twitch at once!`);
+		}
+
 		return ready;
 	}
 
 	// Buffer incoming data from OBS
 	clientSocket.on('data', chunk => {
 		if (ended) return;
-		pushToBuffer(chunk);
+		logToFile('INFO', `[Data] Received ${chunk.length} bytes from OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+		// pushToBuffer(chunk);
 	});
 
 	clientSocket.on('close', () => {
 		ended = true;
 		clearInterval(interval);
 		if (twitchSocket) twitchSocket.end();
-		console.log(`[Disconnect] OBS client disconnected: ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
+		logToFile('INFO', `[Disconnect] OBS client disconnected: ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
 	});
 
 	clientSocket.on('error', err => {
 		ended = true;
 		clearInterval(interval);
 		if (twitchSocket) twitchSocket.destroy();
-		console.error(`[Error] OBS client error: ${err.message}`);
+		logToFile('Error', `OBS client error: ${err.message}`);
 	});
-
-	/**@type {fs.ReadStream} */
-	let imageStream = null;
-	let imageStreamEnded = false;
-	function sendImageToTwitch() {
-		if (imageStream) return; // Already sending
-		imageStream = fs.createReadStream('standby.flv'); // Your FLV video file
-		imageStreamEnded = false;
-		imageStream.on('data', chunk => {
-			if (twitchSocket?.writable) {
-				twitchSocket.write(chunk);
-			}
-		});
-		imageStream.on('end', () => {
-			imageStreamEnded = true;
-			console.log('[Image] Standby image stream ended.');
-		});
-		imageStream.on('error', err => {
-			console.error('[Image] Error streaming standby image:', err);
-		});
-
-		setTimeout(() => {
-			imageStream.destroy();
-			imageStream = null;
-			console.log('[Image] Standby image stream destroyed.');
-		}, STREAM_DELAY_MS); // Adjust timeout as needed
-	}
 
 	// Periodically flush delayed data to Twitch
 	const interval = setInterval(() => {
 		if (ended) return;
-		if (state === 'BUILD_UP_DELAY') {
-			sendImageToTwitch(); // Send standby image if delay is active
-			return;
-		}
-
-		const readyChunks = popDelayedChunks();
-		for (const chunk of readyChunks) {
+		const readyChunks = popReadyChunks();
+		for (const { chunk, id } of readyChunks) {
 			if (twitchSocket?.writable) {
+				logToFile('INFO', `[Flush] Sending [${id}] ${chunk.length} bytes to Twitch`);
 				twitchSocket.write(chunk);
 			}
 		}
 	}, LATENCY_INTERVAL); // Check every 10ms for low latency
+
+	// RTMP parser (dummy implementation, replace with actual RTMP parsing logic)
+
+	const Rtmp = require('node-media-server/src/protocol/rtmp.js');
+	logToFile('INFO', `[RTMP] Initializing RTMP server for OBS client`);
+	/** @type {Rtmp} */
+	const rtmp = new Rtmp();
+	// console.log(`[RTMP] RTMP server initialized for OBS client`);
+
+	/**
+	 * @param {object} req
+	 * @param {string} req.app
+	 * @param {string} req.name
+	 * @param {string} req.host
+	 * @param {object} req.query
+	 */
+	rtmp.onConnectCallback = req => {
+		logToFile('INFO', `[RTMP] Client connected: [App/${req.app}] [Name/${req.name}] [Host/${req.host}] [StreamPath/${req.app}/${req.name}] [Query/${JSON.stringify(req.query)}]`);
+	};
+	rtmp.onPlayCallback = () => {
+		logToFile('INFO', `[RTMP] Client started playing stream`);
+	};
+	rtmp.onPushCallback = () => {
+		logToFile('INFO', `[RTMP] Client started pushing stream`);
+	};
+	/** @param {Buffer} buffer */
+	rtmp.onOutputCallback = buffer => {
+		return; // Disable output callback for now
+		if (twitchSocket?.writable) {
+			// console.log(`[RTMP] Sending output to Twitch: ${buffer.length} bytes`);
+			// twitchSocket.write(buffer);
+		} else console.warn(`[RTMP] Cannot send output to Twitch, socket not writable`);
+	};
+	/** @param {AVPacket} packet */
+	rtmp.onPacketCallback = packet => {
+		logToFile('INFO', `[RTMP] Received packet: Codec ID ${packet.codec_id}, Type ${packet.codec_type}, Size ${packet.size}`);
+		return; // Disable packet callback for now
+		if (twitchSocket?.writable) {
+			const rtmpMessage = Rtmp.createMessage(packet);
+			// console.log(`[RTMP] Broadcast packet to Twitch: ${rtmpMessage.length} bytes`);
+			// twitchSocket.write(rtmpMessage);
+		} else console.warn(`[RTMP] Cannot broadcast packet to Twitch, socket not writable`);
+		sentPackage = true; // Indicate that a package was sent
+	};
+
+	let sentPackage;
+
+	/** @param {Buffer} data */
+	clientSocket.on('data', data => {
+		if (ended) return;
+		logToFile('INFO', `[RTMP] Received Client data: ${data.length} bytes`);
+		sentPackage = false; // Reset sentPackage flag for each new data chunk
+		let err = rtmp.parserData(data);
+		logToFile('INFO', `[RTMP] Chunk Size: ${rtmp.inChunkSize}/${rtmp.outChunkSize}`);
+		handleData(data, rtmp.inChunkSize); // Buffer the incoming data with the current output chunk size
+		sentPackage = true; // Assume we sent a package unless an error occurs
+		if (!sentPackage) {
+			// If no package was sent, send the data to Twitch
+			if (!twitchSocket?.writable) {
+				logToFile('WARN', `[RTMP] Twitch socket not writable, cannot send data`);
+				err = new Error('Twitch socket not writable');
+			} else {
+				sentPackage = true;
+				logToFile('INFO', `[RTMP] Sending data to Twitch: ${data.length} bytes`);
+				twitchSocket.write(data);
+			}
+		}
+		if (err != null) {
+			logToFile('ERROR', `[RTMP] Error parsing data: ${err}`);
+			this.clientSocket.end();
+		}
+	});
 });
 
 server.listen(LOCAL_PORT, () => {
-	console.log(`DelayRelay proxy listening on port ${LOCAL_PORT}`);
-	console.log(`Forwarding to Twitch with ${STREAM_DELAY_MS / 1000}s delay.`);
+	logToFile('INFO', `DelayRelay proxy listening on port ${LOCAL_PORT}`);
+	logToFile('INFO', `Forwarding to Twitch with ${STREAM_DELAY_MS / 1000}s delay.`);
 });
+
+function formatBytes(bytes) {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}

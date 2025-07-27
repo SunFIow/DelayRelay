@@ -5,5 +5,10 @@
 	"license": "MIT",
 	"scripts": {
 		"start": "node index.js"
-	}
+	},
+	"dependencies": {
+		"@types/node-media-server": "^2.3.7",
+		"node-media-server": "^4.0.18"
+	},
+	"packageManager": "yarn@1.22.19"
 }
