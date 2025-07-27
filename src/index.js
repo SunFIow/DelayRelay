@@ -1,9 +1,10 @@
-import { StreamBuffer } from './streamBuffer.js';
-import { LOGGER } from './logger.js';
-import { ApiServer } from './apiServer.js';
-import Rtmp from 'node-media-server/src/protocol/rtmp.js';
-import { createServer, connect } from 'net';
+import net from 'net';
 import AVPacket from 'node-media-server/src/core/avpacket.js';
+import Rtmp from 'node-media-server/src/protocol/rtmp.js';
+
+import { ApiServer } from './apiServer.js';
+import { LOGGER } from './logger.js';
+import { StreamBuffer } from './streamBuffer.js';
 
 // Configuration
 let LOCAL_PORT = 8888; // RTMP default port
@@ -51,11 +52,11 @@ new ApiServer({
 	}
 });
 
-const server = createServer(clientSocket => {
+const server = net.createServer(clientSocket => {
 	clientSocket.setNoDelay(true);
 
 	// Connect to Twitch immediately
-	const twitchSocket = connect(REMOTE_RTMP_PORT, REMOTE_RTMP_URL, () => {
+	const twitchSocket = net.connect(REMOTE_RTMP_PORT, REMOTE_RTMP_URL, () => {
 		LOGGER.info(`[Connect] Connected to Twitch for OBS client ${clientSocket.remoteAddress}:${clientSocket.remotePort}`);
 		twitchSocket.pipe(clientSocket);
 	});

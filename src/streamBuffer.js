@@ -1,4 +1,4 @@
-import { LOGGER } from './src/logger.js';
+import { LOGGER } from './logger.js';
 
 export class StreamBuffer {
 	/**
