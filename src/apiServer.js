@@ -10,12 +10,17 @@ export class ApiServer {
 	constructor() {
 		this.port = HTTP_API_PORT;
 		this.server = http.createServer((req, res) => this.requestHandler(req, res));
+	}
+
+	run() {
 		this.server.listen(this.port, () => {
 			LOGGER_API.info(`HTTP API listening on http://localhost:${this.port}`);
 			LOGGER.info(`HTTP API listening on http://localhost:${this.port}`);
 			console.log(`HTTP API listening on http://localhost:${this.port}`);
 		});
 	}
+
+	/** Sends a simple HTML page with links to API endpoints */
 
 	simplePage(req, res) {
 		res.writeHead(200, { 'Content-Type': 'text/html' });
