@@ -1,13 +1,26 @@
 {
 	"name": "delayrelay",
 	"version": "1.0.0",
+	"author": "SunFIow",
+	"type": "module",
+	"description": "A simple RTMP relay server that allows you to delay streams, without the need to restart the stream.",
+	"keywords": [
+		"rtmp",
+		"relay",
+		"streaming",
+		"twitch"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/SunFIow/delayrelay.git"
+	},
+	"module": "index.js",
 	"main": "index.js",
 	"license": "MIT",
 	"scripts": {
 		"start": "node index.js"
 	},
 	"dependencies": {
-		"@types/node-media-server": "^2.3.7",
 		"node-media-server": "^4.0.18"
 	},
 	"packageManager": "yarn@1.22.19"
