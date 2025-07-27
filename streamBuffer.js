@@ -1,7 +1,7 @@
 // streamBuffer.js
 // Encapsulates stream buffering and relay logic for DelayRelay
 
-class StreamBuffer {
+export default class StreamBuffer {
 	/**
 	 * @param {object} opts
 	 * @param {number} opts.streamDelayMs
@@ -128,5 +128,3 @@ class StreamBuffer {
 		return ready;
 	}
 }
-
-module.exports = StreamBuffer;

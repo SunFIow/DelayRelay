@@ -1,5 +1,4 @@
 const net = require('net');
-const http = require('http');
 const fs = require('fs');
 const AVPacket = require('node-media-server/src/core/avpacket');
 
@@ -92,7 +91,7 @@ new ApiServer({
 });
 
 // Modular buffer logic using StreamBuffer
-const StreamBuffer = require('./streamBuffer');
+const StreamBuffer = require('./streamBuffer').default;
 const { ApiServer } = require('./apiServer');
 
 const server = net.createServer(clientSocket => {
