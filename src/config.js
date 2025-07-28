@@ -1,6 +1,6 @@
 class Config {
 	constructor() {
-		this.TESTING = true; // Set to true for local testing
+		this.TESTING = false; // Set to true for local testing
 
 		this.LOCAL_PORT = 8888; // Local port for the proxy server
 		this.STREAM_DELAY_MS = 30_000; // 30 seconds delay
@@ -13,6 +13,10 @@ class Config {
 		this.LATENCY_INTERVAL = 10; // Check every 10ms for low latency
 		this.MAX_BUFFER_BYTES = 1 * 1024 * 1024 * 1024; // 1 GB max buffer size
 		this.MAX_BUFFER_CHUNKS = this.MAX_BUFFER_BYTES / 6000; // Max number of chunks in buffer
+	}
+
+	toString() {
+		return JSON.stringify(this);
 	}
 }
 

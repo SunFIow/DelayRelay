@@ -35,9 +35,13 @@ export class Logger {
 
 	log(level, message) {
 		const timestamp = this.getTimeString();
-		const line = `[${timestamp}] [${level}] ${message}\n`;
+		const line = `[${timestamp}] [${level}] ${message}`;
 		this.logStream.write(line);
-		this.logLatestStream.write(line);
+		if (level !== 'DEBUG') {
+			this.logLatestStream.write(line);
+			this.logLatestStream.write('\n');
+			console.log(line);
+		}
 	}
 
 	getTimeString() {

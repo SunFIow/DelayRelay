@@ -120,9 +120,9 @@ export class ApiServer {
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
 				config.REMOTE_RTMP_PORT = portVal;
-				LOGGER_API.info(`Twitch RTMP port set to ${portVal}`);
+				LOGGER_API.info(`Remote RTMP port set to ${portVal}`);
 				res.writeHead(200, { 'Content-Type': 'text/plain' });
-				res.end(`Twitch RTMP port set to ${portVal}\n`);
+				res.end(`Remote RTMP port set to ${portVal}\n`);
 			} else {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid port parameter. Usage: "/set-rtmp-port?port=1935"\n');
@@ -177,18 +177,7 @@ export class ApiServer {
 		// /status
 		if (req.method === 'GET' && req.url === '/status') {
 			res.writeHead(200, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					localPort: config.LOCAL_PORT,
-					streamDelay: config.STREAM_DELAY_MS,
-					state: config.STATE,
-					remoteUrl: config.REMOTE_RTMP_URL,
-					remotePort: config.REMOTE_RTMP_PORT,
-					latencyInterval: config.LATENCY_INTERVAL,
-					maxBufferChunks: config.MAX_BUFFER_CHUNKS,
-					maxBufferBytes: config.MAX_BUFFER_BYTES
-				})
-			);
+			res.end(config.toString());
 			return;
 		}
 

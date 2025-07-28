@@ -37,6 +37,27 @@ A Node.js RTMP proxy that adds a configurable stream delay between OBS and Twitc
       -  `/deactivate-delay` — Forward immediately (no delay)
       -  `/status` — Get current configuration
 
+## App Flow
+
+1. **OBS connects to DelayRelay:**
+   -  OBS streams RTMP data to the DelayRelay proxy instead of directly to Twitch.
+2. **DelayRelay buffers incoming stream data:**
+   -  Incoming RTMP chunks are received and stored in a buffer.
+   -  The buffer maintains a rolling window of recent stream data (e.g., last 30 seconds).
+3. **Delay logic:**
+   -  In real-time mode, chunks are relayed immediately to Twitch and also saved in the buffer.
+   -  When delay is activated, DelayRelay "rewinds" the stream by N seconds: it starts relaying the buffered chunks (the last N seconds of stream data) to Twitch, effectively replaying recent content.
+   -  While the buffered window is being sent, new incoming chunks fill a separate buffer.
+   -  Once the buffered window is sent, new chunks are relayed to Twitch only after they have been in the buffer for the configured delay period.
+   -  The app can switch between real-time and delayed modes dynamically, without restarting the stream.
+4. **Forwarding to Twitch:**
+   -  DelayRelay connects to Twitch and forwards the buffered (and/or delayed) RTMP chunks, maintaining the original chunk boundaries and order.
+5. **API and Monitoring:**
+   -  The HTTP API allows runtime control of delay, state, and provides status information.
+   -  Logging tracks buffer state, relay events, and any warnings/errors for diagnostics.
+
+This flow ensures you can add, remove, or change stream delay on the fly, with minimal disruption to your broadcast.
+
 ## Project Structure
 
 -  `src/` — All source code (entry: `src/index.js`)

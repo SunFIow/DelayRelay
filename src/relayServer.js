@@ -46,12 +46,12 @@ class ClientConnection {
 
 		this.clientSocket.on('data', data => {
 			if (this.ended) return;
-			LOGGER.info(`[RTMP] Received Client data: ${data.length} bytes`);
+			LOGGER.debug(`[RTMP] Received Client data: ${data.length} bytes`);
 			let err = this.rtmp.parserData(data);
-			LOGGER.info(`[RTMP] Chunk Size: ${this.rtmp.inChunkSize}/${this.rtmp.outChunkSize}`);
+			LOGGER.debug(`[RTMP] Chunk Size: ${this.rtmp.inChunkSize}/${this.rtmp.outChunkSize}`);
 			this.handleData(data, this.rtmp.inChunkSize);
 			if (err != null) {
-				LOGGER.error(`[RTMP] Error parsing data: ${err}`);
+				LOGGER.fatal(`[RTMP] Error parsing data: ${err}`);
 				this.clientSocket.end();
 			}
 		});
@@ -67,7 +67,7 @@ class ClientConnection {
 			this.ended = true;
 			clearInterval(this.interval);
 			if (this.remoteSocket) this.remoteSocket.destroy();
-			LOGGER.error(`Client Error: ${err.message}`);
+			LOGGER.fatal(`Client Error: ${err.message}`);
 		});
 	}
 
@@ -75,20 +75,19 @@ class ClientConnection {
 		this.remoteSocket = net.connect(config.REMOTE_RTMP_PORT, config.REMOTE_RTMP_URL);
 		this.remoteSocket = new net.Socket(); // Not connected yet
 		this.remoteSocket.on('connect', () => {
-			LOGGER.info(`[Connect] Connected to Twitch`);
+			LOGGER.info(`[Connect] Connected to Remote`);
 			this.remoteSocket.pipe(this.clientSocket);
 		});
 		this.remoteSocket.setNoDelay(true);
 
 		this.remoteSocket.on('error', err => {
-			LOGGER.error(`Twitch socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
-			LOGGER.error(`Current state: ${config.STATE}`);
+			LOGGER.fatal(`Remote socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
 			this.clientSocket.end();
 		});
 
 		this.remoteSocket.on('close', err => {
-			if (err) LOGGER.error(`[Disconnect] Twitch connection closed with error: ${err}`);
-			else LOGGER.info(`[Disconnect] Twitch connection closed`);
+			if (err) LOGGER.error(`[Disconnect] Remote connection closed with error: ${err}`);
+			else LOGGER.info(`[Disconnect] Remote connection closed`);
 			this.clientSocket.end();
 		});
 		this.ended = false;
@@ -100,12 +99,13 @@ class ClientConnection {
 	 * @param {number} inChunkSize - The size of each chunk to process.
 	 */
 	handleData(chunks, inChunkSize) {
-		while (chunks.length >= inChunkSize) {
-			const completeChunk = chunks.slice(0, inChunkSize);
-			chunks = chunks.slice(inChunkSize);
-			this.buffer.pushToBuffer(completeChunk, this.clientSocket);
-		}
-		if (chunks.length > 0) this.buffer.pushToBuffer(chunks, this.clientSocket);
+		// while (chunks.length >= inChunkSize) {
+		// 	const completeChunk = chunks.slice(0, inChunkSize);
+		// 	chunks = chunks.slice(inChunkSize);
+		// 	this.buffer.pushToBuffer(completeChunk, this.clientSocket);
+		// }
+		// if (chunks.length > 0)
+		this.buffer.pushToBuffer(chunks, this.clientSocket);
 	}
 
 	flush() {
@@ -113,7 +113,7 @@ class ClientConnection {
 		const readyChunks = this.buffer.popReadyChunks();
 		for (const { chunk, id } of readyChunks) {
 			if (this.remoteSocket?.writable) {
-				LOGGER.info(`[Flush] Sending [${id}] ${chunk.length} bytes to Twitch`);
+				LOGGER.debug(`[Flush] Sending [${id}] ${chunk.length} bytes to Remote`);
 				this.remoteSocket.write(chunk);
 			}
 		}
@@ -134,7 +134,7 @@ export class RelayServer {
 	run() {
 		this.server.listen(config.LOCAL_PORT, () => {
 			LOGGER.info(`DelayRelay proxy listening on port ${config.LOCAL_PORT}`);
-			LOGGER.info(`Forwarding to Twitch with ${config.STREAM_DELAY_MS / 1000}s delay.`);
+			LOGGER.info(`Forwarding to Remote with ${config.STREAM_DELAY_MS / 1000}s delay.`);
 		});
 	}
 }

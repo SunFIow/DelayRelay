@@ -70,6 +70,9 @@ export class StreamBuffer {
 				const buf = this.timedBuffer.shift();
 				this.totalLength -= buf.chunk.length;
 			}
+			while (this.delayBuffer.length > 0) {
+				this.delayBuffer.shift();
+			}
 			config.STATE = 'REALTIME';
 		} else if (config.STATE === 'REALTIME') {
 			while (this.timedBuffer.length > 0) {
@@ -97,8 +100,9 @@ export class StreamBuffer {
 		this.relayCount += ready.length;
 		if (this.relayCount % LOG_EVERY === 0) {
 			LOGGER.info(`[Relay] Relayed ${ready.length}/${this.relayCount} chunks so far`);
-		} else if (ready.length > 25) {
-			LOGGER.warn(`[Relay] [WARNING] Sending ${ready.length} chunks to Twitch at once!`);
+		}
+		if (ready.length > 25) {
+			LOGGER.warn(`[Relay] Sending ${ready.length} chunks to Remote at once!`);
 		}
 		return ready;
 	}
