@@ -23,19 +23,11 @@ export class StreamBuffer {
 		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 	}
 
-	pushToBuffer(chunk, clientSocket) {
-		const now = Date.now();
-		this.timedBuffer.push({ chunk, time: now, id: this.ID++ });
-		this.totalLength += chunk.length;
-		this.chunkAddCount++;
-		if (this.chunkAddCount % LOG_EVERY === 0) {
-			LOGGER.info(`[Buffer] Added ${this.chunkAddCount} chunks so far`);
-			LOGGER.info(`[Buffer] timedBuffer: ${this.timedBuffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
-		}
+	handleMemoryManagement(socket) {
 		// Memory management: pause or drop
 		if (this.timedBuffer.length > config.MAX_BUFFER_CHUNKS || this.totalLength > config.MAX_BUFFER_BYTES) {
-			if (typeof clientSocket.pause === 'function' && !this.paused) {
-				clientSocket.pause();
+			if (typeof socket.pause === 'function' && !this.paused) {
+				socket.pause();
 				this.paused = true;
 				if (config.STATE !== 'BUFFERING') {
 					LOGGER.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
@@ -50,11 +42,26 @@ export class StreamBuffer {
 			}
 		} else if (this.paused && this.timedBuffer.length < config.MAX_BUFFER_CHUNKS * 0.8 && this.totalLength < config.MAX_BUFFER_BYTES * 0.8) {
 			// Resume if buffer is below 80% of limit
-			if (typeof clientSocket.resume === 'function') {
-				clientSocket.resume();
+			if (typeof socket.resume === 'function') {
+				socket.resume();
 				this.paused = false;
 				LOGGER.info(`[Memory] Buffer below threshold. Resumed OBS input.`);
 			}
+		}
+	}
+
+	/**
+	 * Push a chunk of data to the buffer.
+	 * @param {Buffer} chunk - The data chunk to push.
+	 */
+	pushToBuffer(chunk) {
+		const now = Date.now();
+		this.timedBuffer.push({ chunk, time: now, id: this.ID++ });
+		this.totalLength += chunk.length;
+		this.chunkAddCount++;
+		if (this.chunkAddCount % LOG_EVERY === 0) {
+			LOGGER.info(`[Buffer] Added ${this.chunkAddCount} chunks so far`);
+			LOGGER.info(`[Buffer] timedBuffer: ${this.timedBuffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
 		}
 	}
 

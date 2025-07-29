@@ -1,0 +1,96 @@
+import net from 'net';
+import { config } from '../config.js';
+import { LOGGER } from '../logger.js';
+import { StreamBuffer } from '../streamBuffer.js';
+
+/**
+ * @class
+ * @property {net.Socket} clientSocket
+ * @property {net.Socket} remoteSocket
+ * @property {StreamBuffer} buffer
+ * @property {boolean} ended
+ */
+export class Connection {
+	/** @param {net.Socket} clientSocket */
+	constructor(clientSocket) {
+		this.clientSocket = clientSocket;
+		this.buffer = new StreamBuffer();
+		this.ended = false;
+		this.initializeClient();
+		this.initializeRemote();
+	}
+
+	run() {
+		this.remoteSocket.connect(config.REMOTE_RTMP_PORT, config.REMOTE_RTMP_URL);
+		this.clientSocket.resume();
+		this.interval = setInterval(this.sendChunks.bind(this), config.LATENCY_INTERVAL);
+	}
+
+	initializeClient() {
+		this.clientSocket.setNoDelay(true);
+
+		this.clientSocket.on('data', data => {
+			if (this.ended) return;
+			LOGGER.debug(`[Data] Received Client data: ${data.length} bytes`);
+			this.onData(data);
+		});
+
+		this.clientSocket.on('error', err => {
+			LOGGER.error(`Client socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
+		});
+
+		this.clientSocket.on('close', () => {
+			if (err) LOGGER.error(`[Disconnect] Client connection closed with error: ${err}`);
+			else LOGGER.info(`[Disconnect] Client connection closed`);
+			this.ended = true;
+			clearInterval(this.interval);
+			this.remoteSocket.end();
+		});
+	}
+
+	initializeRemote() {
+		this.remoteSocket = new net.Socket();
+		this.remoteSocket.setNoDelay(true);
+
+		this.remoteSocket.on('connect', () => {
+			LOGGER.info(`[Connect] Connected to Remote`);
+			this.remoteSocket.pipe(this.clientSocket);
+		});
+
+		this.remoteSocket.on('data', data => {
+			if (this.ended) return;
+			LOGGER.debug(`[Data] Received Remote data: ${data.length} bytes`);
+		});
+
+		this.remoteSocket.on('error', err => {
+			LOGGER.error(`Remote socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
+		});
+
+		this.remoteSocket.on('close', err => {
+			if (err) LOGGER.error(`[Disconnect] Remote connection closed with error: ${err}`);
+			else LOGGER.info(`[Disconnect] Remote connection closed`);
+			this.ended = true;
+			clearInterval(this.interval);
+			this.clientSocket.end();
+		});
+	}
+
+	sendChunks() {
+		if (this.ended) return;
+		const readyChunks = this.buffer.popReadyChunks();
+		for (const { chunk, id } of readyChunks) {
+			if (this.remoteSocket?.writable) {
+				LOGGER.debug(`[Flush] Sending [${id}] ${chunk.length} bytes to Remote`);
+				this.remoteSocket.write(chunk);
+			} else {
+				LOGGER.warn(`[Flush] Remote socket not writable, skipping chunk [${id}]`);
+			}
+		}
+	}
+
+	/**
+	 *  @abstract This method should be implemented in subclasses to handle incoming data.
+	 * @param {Buffer} chunks
+	 */
+	onData(chunks) {}
+}

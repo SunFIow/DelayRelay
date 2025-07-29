@@ -1,4 +1,5 @@
 import NodeMediaServer from 'node-media-server';
+import logger from 'node-media-server/src/core/logger.js';
 
 /** @type {import("node-media-server").Config} */
 const config = {
@@ -16,4 +17,5 @@ const config = {
 };
 // const nms = new NodeMediaServer(config);
 const nms = new NodeMediaServer({ ...config });
+logger.level = 'trace';
 nms.run();

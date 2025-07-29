@@ -1,6 +1,6 @@
 class Config {
 	constructor() {
-		this.TESTING = false; // Set to true for local testing
+		this.TESTING = true; // Set to true for local testing
 
 		this.LOCAL_PORT = 8888; // Local port for the proxy server
 		this.STREAM_DELAY_MS = 30_000; // 30 seconds delay

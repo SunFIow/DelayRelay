@@ -2,30 +2,25 @@
 
 This project is a Node.js app using Yarn. It acts as a proxy between OBS and Twitch to add a stream delay without restarting the stream.
 
-Key architecture and flow:
+    architecture and flow:
 
--  The app receives RTMP chunks from OBS and relays them to Twitch, preserving chunk boundaries and order.
--  Incoming chunks are buffered, maintaining a rolling window of recent stream data (e.g., last N seconds).
--  When delay is activated, the app "rewinds" the stream by N seconds: it replays the last N seconds of buffered content to Twitch, then continues relaying new chunks only after they have been buffered for the configured delay period.
--  The app can switch between real-time and delayed modes dynamically, without restarting the stream.
--  Buffer management, state transitions (REALTIME, BUFFERING, DELAY, FORWARDING), and memory handling are critical for reliability.
--  Avoid partitioning or merging RTMP chunks; always relay them as received from OBS unless protocol-level handling is required.
+-  The app receives RTMP data from OBS and relays it to Twitch, preserving RTMP chunk boundaries and order.
+-  RTMP protocol parsing and handshake are handled using the node-media-server library within the RtmpConnection class.
 
 Module/Class Interaction Overview:
 
--  `RelayServer`: Main server class. Listens for incoming RTMP connections from OBS. For each connection, creates a `ClientConnection` instance.
--  `ClientConnection`: Handles a single OBS client connection. Manages the socket to Twitch, buffering, state transitions, and relaying of RTMP chunks. Uses a `StreamBuffer` for chunk management.
--  `StreamBuffer`: Manages buffering of RTMP chunks, delay logic, and memory limits. Provides methods to push new chunks and pop ready-to-relay chunks based on the current state.
+-  `RelayServer`: Main server class. Listens for incoming RTMP connections from OBS. For each connection, creates an `RtmpConnection` instance.
+-  `Connection`: Handles a single OBS client connection. Manages sockets to Twitch, parses RTMP protocol, relays RTMP chunks, and can buffer data for delay if enabled.
+-  `StreamBuffer`: Designed to manage buffering of RTMP chunks, delay logic, and memory limits
 -  `ApiServer`: Provides an HTTP API for runtime configuration (e.g., changing delay, querying status, activating/deactivating delay).
 -  `config.js`: Central configuration for ports, delay settings, buffer limits, and state.
 -  `logger.js`: Centralized logging utility for diagnostics and monitoring.
 
 Typical flow:
 
-1. OBS connects to `RelayServer`, which creates a `ClientConnection`.
-2. `ClientConnection` receives RTMP chunks, passes them to `StreamBuffer`.
-3. `StreamBuffer` buffers and manages chunks according to the current state.
-4. `ClientConnection` flushes ready chunks to Twitch.
-5. `ApiServer` allows runtime control and monitoring.
+1. OBS connects to `RelayServer`, which creates an `Connection`.
+2. `Connection` receives RTMP data, parses protocol messages, and relays RTMP chunks to Twitch.
+3. (Optional) `StreamBuffer` can buffer and manage chunks for delay if enabled.
+4. `ApiServer` allows runtime control and monitoring.
 
-This structure ensures clear separation of concerns and reliable stream relay with dynamic delay control.
+This structure ensures clear separation of concerns and reliable stream relay with protocol compliance and optional dynamic delay control.
