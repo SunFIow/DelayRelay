@@ -8,6 +8,8 @@
 			body {
 				font-family: sans-serif;
 				margin: 1em;
+				background: #fff;
+				color: #222;
 			}
 			form {
 				margin-bottom: 1.5em;
@@ -23,15 +25,53 @@
 			}
 			button {
 				margin-left: 10px;
+				background: #e0e0e0;
+				color: #222;
+				border: 1px solid #bbb;
+				border-radius: 4px;
+				padding: 0.4em 1.2em;
+				cursor: pointer;
+				transition: background 0.2s, color 0.2s, border 0.2s;
+			}
+			button:hover,
+			button:focus {
+				background: #b3d1ff;
+				color: #111;
+				border: 1.5px solid #3399ff;
+				outline: none;
 			}
 			.row {
 				margin-bottom: 0.5em;
 			}
 			#result {
 				background: #f4f4f4;
+				color: #222;
 				padding: 1em;
 				margin-top: 1em;
 				border-radius: 4px;
+			}
+
+			body.dark-mode {
+				background: #181a1b !important;
+				color: #e0e0e0 !important;
+			}
+			body.dark-mode #result {
+				background: #23272e !important;
+				color: #e0e0e0 !important;
+			}
+			body.dark-mode input,
+			body.dark-mode button,
+			body.dark-mode select {
+				background: #23272e !important;
+				color: #e0e0e0 !important;
+				border: 2px solid #444 !important;
+			}
+			body.dark-mode button:hover,
+			body.dark-mode button:focus {
+				background: #2d3a4a !important;
+				color: #fff !important;
+				border: 2px solid #3399ff !important;
+				outline: none;
 			}
 		</style>
 		<script>
@@ -62,9 +102,26 @@
 				var url = path + '?' + param + '=' + encodeURIComponent(val);
 				apiCall(url);
 			}
+			function toggleDarkMode() {
+				document.body.classList.toggle('dark-mode');
+				localStorage.setItem('relay-ui-dark', document.body.classList.contains('dark-mode'));
+			}
+			window.addEventListener('DOMContentLoaded', () => {
+				let darkMode = localStorage.getItem('relay-ui-dark');
+				// Check if dark mode got saved to localStorage
+				// if not load the system preference
+				const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+				if (darkMode === null) {
+					darkMode = prefersDarkScheme.matches ? 'true' : 'false';
+				}
+				if (darkMode === 'true') {
+					document.body.classList.add('dark-mode');
+				}
+			});
 		</script>
 	</head>
 	<body>
+		<button style="float: right; margin-bottom: 1em" onclick="toggleDarkMode()">Toggle Dark Mode</button>
 		<form onsubmit="submitForm(event, '/set-local-port', 'port')">
 			<div class="row"><label>Local Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 8888" /><button type="submit">Set</button></div>
 		</form>
