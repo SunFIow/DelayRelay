@@ -5,11 +5,43 @@
 		<title>RTMP Delay Relay - Control Panel</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<style>
+			:root {
+				--bg: #fff;
+				--fg: #222;
+				--input-bg: #fff;
+				--input-fg: #222;
+				--input-border: #222;
+				--button-bg: #e0e0e0;
+				--button-fg: #222;
+				--button-border: #bbb;
+				--button-hover-bg: #b3d1ff;
+				--button-hover-fg: #111;
+				--button-hover-border: #3399ff;
+				--result-bg: #f4f4f4;
+				--result-fg: #222;
+			}
+
+			body.dark-mode {
+				--bg: #181a1b;
+				--fg: #e0e0e0;
+				--input-bg: #23272e;
+				--input-fg: #e0e0e0;
+				--input-border: #444;
+				--button-bg: #23272e;
+				--button-fg: #e0e0e0;
+				--button-border: #444;
+				--button-hover-bg: #2d3a4a;
+				--button-hover-fg: #fff;
+				--button-hover-border: #3399ff;
+				--result-bg: #23272e;
+				--result-fg: #e0e0e0;
+			}
+
 			body {
 				font-family: sans-serif;
 				margin: 1em;
-				background: #fff;
-				color: #222;
+				background: var(--bg);
+				color: var(--fg);
 			}
 			form {
 				margin-bottom: 1.5em;
@@ -22,56 +54,42 @@
 			input[type='number'],
 			input[type='text'] {
 				width: 120px;
+				background: var(--input-bg);
+				color: var(--input-fg);
+				border: 1.5px solid var(--input-border);
+				border-radius: 4px;
+				padding: 0.4em 0.9em;
 			}
 			button {
 				margin-left: 10px;
-				background: #e0e0e0;
-				color: #222;
-				border: 1px solid #bbb;
+				background: var(--button-bg);
+				color: var(--button-fg);
+				border: 1px solid var(--button-border);
 				border-radius: 4px;
-				padding: 0.4em 1.2em;
+				padding: 0.4em 0.9em;
 				cursor: pointer;
 				transition: background 0.2s, color 0.2s, border 0.2s;
 			}
 			button:hover,
-			button:focus {
-				background: #b3d1ff;
-				color: #111;
-				border: 1.5px solid #3399ff;
+			button:focus-visible {
+				background: var(--button-hover-bg);
+				color: var(--button-hover-fg);
+				border: 1.5px solid var(--button-hover-border);
 				outline: none;
 			}
 			.row {
 				margin-bottom: 0.5em;
+
+				> * {
+					margin-bottom: 0.5em;
+				}
 			}
 			#result {
-				background: #f4f4f4;
-				color: #222;
+				background: var(--result-bg);
+				color: var(--result-fg);
 				padding: 1em;
 				margin-top: 1em;
 				border-radius: 4px;
-			}
-
-			body.dark-mode {
-				background: #181a1b !important;
-				color: #e0e0e0 !important;
-			}
-			body.dark-mode #result {
-				background: #23272e !important;
-				color: #e0e0e0 !important;
-			}
-			body.dark-mode input,
-			body.dark-mode button,
-			body.dark-mode select {
-				background: #23272e !important;
-				color: #e0e0e0 !important;
-				border: 2px solid #444 !important;
-			}
-			body.dark-mode button:hover,
-			body.dark-mode button:focus {
-				background: #2d3a4a !important;
-				color: #fff !important;
-				border: 2px solid #3399ff !important;
-				outline: none;
 			}
 		</style>
 		<script>
@@ -121,7 +139,12 @@
 		</script>
 	</head>
 	<body>
-		<button style="float: right; margin-bottom: 1em" onclick="toggleDarkMode()">Toggle Dark Mode</button>
+		<div class="row">
+			<button onclick="apiCall('/activate-delay')">Activate Delay</button>
+			<button onclick="apiCall('/deactivate-delay')">Deactivate Delay</button>
+			<button onclick="apiCall('/status')">Show Status</button>
+			<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+		</div>
 		<form onsubmit="submitForm(event, '/set-local-port', 'port')">
 			<div class="row"><label>Local Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 8888" /><button type="submit">Set</button></div>
 		</form>
@@ -143,11 +166,6 @@
 		<form onsubmit="submitForm(event, '/set-max-bytes', 'bytes')">
 			<div class="row"><label>Max Buffer Bytes:</label><input name="bytes" type="number" min="1" required placeholder="e.g. 52428800" /><button type="submit">Set</button></div>
 		</form>
-		<div class="row">
-			<button onclick="apiCall('/activate-delay')">Activate Delay</button>
-			<button onclick="apiCall('/deactivate-delay')">Deactivate Delay</button>
-			<button onclick="apiCall('/status')">Show Status</button>
-		</div>
 		<pre id="result"></pre>
 	</body>
 </html>
