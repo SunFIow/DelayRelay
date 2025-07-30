@@ -1,10 +1,13 @@
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-import { LOGGER, LOGGER_API } from './logger.js';
+import { LOGGER, LOGGER_API } from '../logger.js';
 
 const HTTP_API_PORT = 8080;
 
-import { config } from './config.js';
+import { config } from '../config.js';
 
 export class ApiServer {
 	constructor() {
@@ -21,38 +24,7 @@ export class ApiServer {
 	}
 
 	/** Sends a simple HTML page with links to API endpoints */
-
 	simplePage(req, res) {
-		res.writeHead(200, { 'Content-Type': 'text/html' });
-		res.end(`
-	  <!DOCTYPE html>
-	  <html>
-	  <head>
-		<title>RTMP Delay Relay</title>
-	  </head>
-	  <body>
-		<h1>RTMP Delay Relay</h1>
-		<p>API is running. Use the endpoints to control the proxy.</p>
-		<ul>
-		  <li><a href="/status">Status</a></li>
-		  <li><a href="/set-local-port?port=8888">Set Local Port</a></li>
-		  <li><a href="/set-delay?ms=10000">Set Stream Delay</a></li>
-		  <li><a href="/activate-delay">Activate Delay</a></li>
-		  <li><a href="/deactivate-delay">Deactivate Delay</a></li>
-		  <li><a href="/set-remote-url?url=live.twitch.tv">Set Remote RTMP URL</a></li>
-		  <li><a href="/set-rtmp-port?port=1935">Set Remote RTMP Port</a></li>
-		  <li><a href="/set-latency?ms=10">Set Latency Interval</a></li>
-		  <li><a href="/set-max-chunks?chunks=10000">Set Max Buffer Chunks</a></li>
-		  <li><a href="/set-max-bytes?bytes=52428800">Set Max Buffer Bytes</a></li>
-		</ul>
-	  </body>
-	  </html>
-	`);
-	}
-
-	requestHandler(req, res) {
-		// /set-local-port?port=8888
-
 		if (req.method === 'GET' && req.url.startsWith('/set-local-port')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
@@ -181,7 +153,60 @@ export class ApiServer {
 			return;
 		}
 
-		// If no handlers responded, return a simple homepage
+		res.writeHead(200, { 'Content-Type': 'text/html' });
+		res.end(`
+	  <!DOCTYPE html>
+	  <html>
+	  <head>
+		<title>RTMP Delay Relay</title>
+	  </head>
+	  <body>
+		<h1>RTMP Delay Relay</h1>
+		<p>API is running. Use the endpoints to control the proxy.</p>
+		<ul>
+		  <li><a href="/status">Status</a></li>
+		  <li><a href="/set-local-port?port=8888">Set Local Port</a></li>
+		  <li><a href="/set-delay?ms=10000">Set Stream Delay</a></li>
+		  <li><a href="/activate-delay">Activate Delay</a></li>
+		  <li><a href="/deactivate-delay">Deactivate Delay</a></li>
+		  <li><a href="/set-remote-url?url=live.twitch.tv">Set Remote RTMP URL</a></li>
+		  <li><a href="/set-rtmp-port?port=1935">Set Remote RTMP Port</a></li>
+		  <li><a href="/set-latency?ms=10">Set Latency Interval</a></li>
+		  <li><a href="/set-max-chunks?chunks=10000">Set Max Buffer Chunks</a></li>
+		  <li><a href="/set-max-bytes?bytes=52428800">Set Max Buffer Bytes</a></li>
+		</ul>
+		<p><a href="/ui"><b>Try the improved UI</b></a></p>
+	  </body>
+	  </html>
+	`);
+	}
+
+	/** Sends the improved HTML UI from a static file */
+	improvedUIPage(req, res) {
+		// __dirname workaround for ES6 modules
+		const __filename = fileURLToPath(import.meta.url);
+		const __dirname = path.dirname(__filename);
+		const filePath = path.join(__dirname, 'relay-ui.html');
+		fs.readFile(filePath, 'utf8', (err, data) => {
+			if (err) {
+				res.writeHead(500, { 'Content-Type': 'text/plain' });
+				res.end('Failed to load UI page.');
+				return;
+			}
+			res.writeHead(200, { 'Content-Type': 'text/html' });
+			res.end(data);
+		});
+	}
+
+	requestHandler(req, res) {
+		// /set-local-port?port=8888
+
+		// Improved UI endpoint
+		if (req.method === 'GET' && req.url === '/ui') {
+			this.improvedUIPage(req, res);
+			return;
+		}
+
 		this.simplePage(req, res);
 	}
 }

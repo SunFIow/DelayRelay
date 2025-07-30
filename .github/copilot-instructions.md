@@ -12,7 +12,9 @@ This project is a Node.js application (Yarn-based) that acts as a proxy between 
 -  **config.js**: Central configuration for ports, delay, buffer limits, and state. Exposes a `toString()` method for status reporting.
 -  **logger.js**: Centralized logging utility for diagnostics and monitoring.
 
-## Key Patterns & Conventions
+-## Key Patterns & Conventions
+
+-  **ES6 Modules**: All source files use ES6 module syntax (`import`/`export`). Use this style for all new code and imports.
 
 -  **RTMP Protocol Handling**: All protocol parsing and handshake logic is delegated to the open-source `node-media-server` (see `copyof-node-media-server/`). Do not modify this folder; it is a direct copy for integration only.
 -  **Dynamic Configuration**: All runtime settings (ports, delay, buffer sizes, etc.) are managed via the HTTP API (`ApiServer`). Example: `GET /set-delay?ms=15000` sets a 15s delay.

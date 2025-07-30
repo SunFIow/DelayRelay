@@ -1,4 +1,4 @@
-import { ApiServer } from './apiServer.js';
+import { ApiServer } from './api/apiServer.js';
 import { RelayServer } from './relayServer.js';
 
 const apiServer = new ApiServer();
