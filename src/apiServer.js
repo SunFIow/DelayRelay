@@ -84,7 +84,7 @@ export class ApiServer {
 		}
 		// /activate-delay
 		if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
-			config.STATE = 'BUFFERING';
+			config.STATE = 'REWIND';
 			LOGGER_API.info(`Delay activated`);
 			LOGGER.info(`Delay activated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -93,7 +93,7 @@ export class ApiServer {
 		}
 		// /deactivate-delay
 		if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
-			config.STATE = 'FORWARDING';
+			config.STATE = 'FORWARD';
 			LOGGER_API.info(`Delay deactivated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay deactivated\n`);

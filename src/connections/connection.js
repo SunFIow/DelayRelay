@@ -39,8 +39,8 @@ export class Connection {
 			LOGGER.error(`Client socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
 		});
 
-		this.clientSocket.on('close', () => {
-			if (err) LOGGER.error(`[Disconnect] Client connection closed with error: ${err}`);
+		this.clientSocket.on('close', hadError => {
+			if (hadError) LOGGER.error(`[Disconnect] Client connection closed with error: ${hadError}`);
 			else LOGGER.info(`[Disconnect] Client connection closed`);
 			this.ended = true;
 			clearInterval(this.interval);
@@ -54,20 +54,21 @@ export class Connection {
 
 		this.remoteSocket.on('connect', () => {
 			LOGGER.info(`[Connect] Connected to Remote`);
-			this.remoteSocket.pipe(this.clientSocket);
+			// this.remoteSocket.pipe(this.clientSocket);
 		});
 
 		this.remoteSocket.on('data', data => {
 			if (this.ended) return;
 			LOGGER.debug(`[Data] Received Remote data: ${data.length} bytes`);
+			this.clientSocket.write(data);
 		});
 
 		this.remoteSocket.on('error', err => {
 			LOGGER.error(`Remote socket error(${err}): \nName: ${err.name}\nMessage: ${err.message}\nStack: ${err.stack}\nCause: ${err.cause}`);
 		});
 
-		this.remoteSocket.on('close', err => {
-			if (err) LOGGER.error(`[Disconnect] Remote connection closed with error: ${err}`);
+		this.remoteSocket.on('close', hadError => {
+			if (hadError) LOGGER.error(`[Disconnect] Remote connection closed with error: ${hadError}`);
 			else LOGGER.info(`[Disconnect] Remote connection closed`);
 			this.ended = true;
 			clearInterval(this.interval);
@@ -78,6 +79,7 @@ export class Connection {
 	sendChunks() {
 		if (this.ended) return;
 		const readyChunks = this.buffer.popReadyChunks();
+
 		for (const { chunk, id } of readyChunks) {
 			if (this.remoteSocket?.writable) {
 				LOGGER.debug(`[Flush] Sending [${id}] ${chunk.length} bytes to Remote`);

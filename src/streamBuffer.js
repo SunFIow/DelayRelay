@@ -1,19 +1,52 @@
+/*
+
+StreamBuffer class for managing video stream chunks with timing and delay buffers.
+There are ChunkData Arrays:
+1. `buffer`: 
+2. `delayBuffer`: A rolling window of chunks from the last N seconds. (The amount of time we want to delay the stream)
+
+
+*/
+
 import { LOGGER } from './logger.js';
 
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
 import { config } from './config.js';
+import { CodecType, PacketFlags } from './parsing.js';
 
+/**
+ * @typedef {Object} ChunkData
+ * @property {Buffer} chunk
+ * @property {number} time
+ * @property {number} id
+ * @property {boolean} keyFrame
+ */
+
+/**
+ * @class
+ * @property {number} CURRENT_ID - Unique ID for each chunk
+ * @property {ChunkData[]} buffer
+ * @property {ChunkData[]} delayBuffer
+ * @property {boolean} isDelayBufferActive - Whether the delay buffer is currently active
+ * @property {number} totalLength - Total length of all chunks in bytes
+ * @property {boolean} paused - Whether the buffer is paused
+ * @property {number} chunkAddCount - Count of chunks added to the buffer
+ * @property {number} relayCount - Count of chunks relayed
+ */
 export class StreamBuffer {
 	constructor() {
-		this.timedBuffer = [];
-		this.delayBuffer = [];
+		this.CURRENT_ID = 0;
+		/** @type {ChunkData[]} */
+		this.buffer = [];
 		this.totalLength = 0;
+		/** @type {ChunkData[]} */
+		this.delayBuffer = [];
+		this.isDelayBufferActive = false;
 
+		this.paused = false;
 		this.chunkAddCount = 0;
 		this.relayCount = 0;
-		this.ID = 0;
-		this.paused = false;
 	}
 
 	formatBytes(bytes) {
@@ -25,22 +58,22 @@ export class StreamBuffer {
 
 	handleMemoryManagement(socket) {
 		// Memory management: pause or drop
-		if (this.timedBuffer.length > config.MAX_BUFFER_CHUNKS || this.totalLength > config.MAX_BUFFER_BYTES) {
+		if (this.buffer.length > config.MAX_BUFFER_CHUNKS || this.totalLength > config.MAX_BUFFER_BYTES) {
 			if (typeof socket.pause === 'function' && !this.paused) {
 				socket.pause();
 				this.paused = true;
-				if (config.STATE !== 'BUFFERING') {
-					LOGGER.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
+				if (config.STATE !== 'REWIND') {
+					LOGGER.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
 				} else {
-					LOGGER.warn(`[Memory] Buffer limit reached while buffering. Pausing OBS input. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
+					LOGGER.warn(`[Memory] Buffer limit reached while buffering. Pausing OBS input. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
 				}
 			} else {
 				// Drop oldest chunk
-				const dropped = this.timedBuffer.shift();
+				const dropped = this.buffer.shift();
 				if (dropped) this.totalLength -= dropped.chunk.length;
-				LOGGER.warn(`[Memory] Buffer overflow! Dropped oldest chunk. Buffer: ${this.timedBuffer.length} chunks, ${this.totalLength} bytes`);
+				LOGGER.warn(`[Memory] Buffer overflow! Dropped oldest chunk. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
 			}
-		} else if (this.paused && this.timedBuffer.length < config.MAX_BUFFER_CHUNKS * 0.8 && this.totalLength < config.MAX_BUFFER_BYTES * 0.8) {
+		} else if (this.paused && this.buffer.length < config.MAX_BUFFER_CHUNKS * 0.8 && this.totalLength < config.MAX_BUFFER_BYTES * 0.8) {
 			// Resume if buffer is below 80% of limit
 			if (typeof socket.resume === 'function') {
 				socket.resume();
@@ -53,15 +86,33 @@ export class StreamBuffer {
 	/**
 	 * Push a chunk of data to the buffer.
 	 * @param {Buffer} chunk - The data chunk to push.
+	 * @param {number} codec - The codec type of the chunk.
+	 * @param {number} flags - The flags associated with the chunk.
 	 */
-	pushToBuffer(chunk) {
+	pushToBuffer(chunk, codec, flags) {
 		const now = Date.now();
-		this.timedBuffer.push({ chunk, time: now, id: this.ID++ });
+
+		let keyFrame = false;
+		if (this.CURRENT_ID > 0 && codec === CodecType.VIDEO) {
+			if (flags === PacketFlags.KEY_FRAME && this.lastFlags !== PacketFlags.KEY_FRAME) {
+				keyFrame = true;
+			}
+		}
+		this.lastCodec = codec;
+		this.lastFlags = flags;
+
+		const chunkData = { chunk, time: now, id: this.CURRENT_ID++, keyFrame };
+		this.buffer.push(chunkData);
 		this.totalLength += chunk.length;
+
+		if (!this.isDelayBufferActive && keyFrame) this.isDelayBufferActive = true;
+		if (this.isDelayBufferActive) this.delayBuffer.push(chunkData);
+		this.updateDelayBuffer(now);
+
 		this.chunkAddCount++;
 		if (this.chunkAddCount % LOG_EVERY === 0) {
 			LOGGER.info(`[Buffer] Added ${this.chunkAddCount} chunks so far`);
-			LOGGER.info(`[Buffer] timedBuffer: ${this.timedBuffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
+			LOGGER.info(`[Buffer] timedBuffer: ${this.buffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
 		}
 	}
 
@@ -70,47 +121,95 @@ export class StreamBuffer {
 	 * @returns {Array<{chunk: Buffer, time: number, id: number}>}
 	 */
 	popReadyChunks() {
-		const ready = [];
-		const now = Date.now();
-		if (config.STATE === 'FORWARDING') {
-			while (this.timedBuffer.length > 0) {
-				const buf = this.timedBuffer.shift();
-				this.totalLength -= buf.chunk.length;
-			}
-			while (this.delayBuffer.length > 0) {
-				this.delayBuffer.shift();
-			}
+		if (config.STATE === 'REWIND') {
+			this.handleRewinding();
+			config.STATE = 'DELAY';
+		}
+		if (config.STATE === 'FORWARD') {
+			this.handleForwarding();
 			config.STATE = 'REALTIME';
-		} else if (config.STATE === 'REALTIME') {
-			while (this.timedBuffer.length > 0) {
-				const buf = this.timedBuffer.shift();
-				ready.push(buf);
-				this.delayBuffer.push(buf);
-				this.totalLength -= buf.chunk.length;
+		}
+
+		const readyChunks = [];
+		const now = Date.now();
+
+		while (this.buffer.length > 0 && (config.STATE === 'REALTIME' || now - this.buffer[0].time > config.STREAM_DELAY_MS)) {
+			const buf = this.buffer.shift();
+			readyChunks.push(buf);
+			this.totalLength -= buf.chunk.length;
+		}
+
+		if (readyChunks.length > 0) {
+			this.relayCount += readyChunks.length;
+			if (this.relayCount % LOG_EVERY === 0) {
+				LOGGER.info(`[Relay] Relayed ${readyChunks.length}/${this.relayCount} chunks so far`);
 			}
-			while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
+			if (readyChunks.length > 25) {
+				LOGGER.warn(`[Relay] Sending ${readyChunks.length} chunks to Remote at once!`);
+			}
+		}
+
+		return readyChunks;
+	}
+
+	updateDelayBuffer(now) {
+		if (config.STATE === 'REWIND') return;
+		while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
+			// Remove chunks until we find a key frame or the buffer is empty
+			let skipSameKeyFrame = this.delayBuffer[0].keyFrame;
+			while (this.delayBuffer.length > 0 && !skipSameKeyFrame) {
 				this.delayBuffer.shift();
+				skipSameKeyFrame = this.delayBuffer[0]?.keyFrame;
 			}
-		} else if (config.STATE === 'DELAY') {
-			while (this.timedBuffer.length > 0 && now - this.timedBuffer[0].time > config.STREAM_DELAY_MS) {
-				const buf = this.timedBuffer.shift();
-				ready.push(buf);
-				this.totalLength -= buf.chunk.length;
+
+			// Remove all chunks associated with the found key frame or the buffer is empty
+			let foundNewKeyFrame = false;
+			while (this.delayBuffer.length > 0 && !foundNewKeyFrame) {
+				const buf = this.delayBuffer[0];
+				const isKeyFrame = buf.keyFrame;
+				// Dont check for key frame if we are skipping same key frame headers
+				if (!isKeyFrame && skipSameKeyFrame) skipSameKeyFrame = false;
+				// When we find a new key frame, we stop removing chunks
+				if (isKeyFrame && !skipSameKeyFrame) foundNewKeyFrame = true;
+				else this.delayBuffer.shift();
 			}
-		} else if (config.STATE === 'BUFFERING') {
-			while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
-				const buf = this.delayBuffer.shift();
-				ready.push(buf);
+		}
+	}
+
+	handleRewinding() {
+		// Add all chunks from delayBuffer to the start of buffer
+		// this.buffer.unshift(...this.delayBuffer);
+		for (let i = this.delayBuffer.length - 1; i >= 0; i--) {
+			const chunkData = this.delayBuffer[i];
+			if (this.buffer.findIndex(b => b.id === chunkData.id) === -1) {
+				this.buffer.unshift(chunkData);
+				this.totalLength += chunkData.chunk.length;
 			}
-			if (this.delayBuffer.length === 0) config.STATE = 'DELAY';
 		}
-		this.relayCount += ready.length;
-		if (this.relayCount % LOG_EVERY === 0) {
-			LOGGER.info(`[Relay] Relayed ${ready.length}/${this.relayCount} chunks so far`);
+	}
+
+	handleForwarding() {
+		// Only keep chunks associated with the most recent key frame
+
+		let mostRecentKeyFrameStart = -1;
+		let mostRecentKeyFrameEnd = -1;
+		for (let i = this.buffer.length - 1; i >= 0; i--) {
+			const isKeyFrame = this.buffer[i].keyFrame;
+			if (!isKeyFrame) {
+				if (mostRecentKeyFrameStart === -1) {
+					break; // Found the start of the most recent key frame
+				}
+			} else if (!mostRecentKeyFrameEnd) mostRecentKeyFrameEnd = i;
+			else mostRecentKeyFrameStart = i;
 		}
-		if (ready.length > 25) {
-			LOGGER.warn(`[Relay] Sending ${ready.length} chunks to Remote at once!`);
+
+		// Now remove all chunks before the most recent key frame
+		if (mostRecentKeyFrameStart !== -1) {
+			this.buffer = this.buffer.slice(mostRecentKeyFrameStart);
+			this.totalLength = this.buffer.reduce((sum, buf) => sum + buf.chunk.length, 0);
+		} else {
+			this.buffer = [];
+			this.totalLength = 0;
 		}
-		return ready;
 	}
 }

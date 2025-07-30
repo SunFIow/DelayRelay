@@ -6,7 +6,7 @@ export class Logger {
 		const pad = n => n.toString().padStart(2, '0');
 		const ts = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}__${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 		this.logFile = `logs/${prefix}_${ts}.log`;
-		this.logLatest = `logs/relay_latest.log`;
+		this.logLatest = `${prefix}_latest.log`;
 		// Truncate latest log files at startup
 		fs.writeFileSync(this.logLatest, '');
 		this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
