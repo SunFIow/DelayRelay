@@ -2,6 +2,8 @@
 
 This project is a Node.js app using Yarn. It acts as a proxy between OBS and Twitch to add a stream delay without restarting the stream.
 
+**Note:** The folder `copyof-node-media-server` is not original code for this project. It is a direct copy of the open-source Node.js library [node-media-server](https://github.com/illuspas/node-media-server), included for protocol handling and integration purposes.
+
     architecture and flow:
 
 -  The app receives RTMP data from OBS and relays it to Twitch, preserving RTMP chunk boundaries and order.
