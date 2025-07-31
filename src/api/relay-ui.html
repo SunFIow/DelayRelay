@@ -28,15 +28,15 @@
 				font-family: system-ui, sans-serif;
 				margin: 0;
 				padding: 0;
-				min-width: 220px;
-				min-height: 180px;
 				font-size: 15px;
+				overflow-x: hidden;
 			}
 			.container {
 				padding: 1em 1.2em 0.5em 1.2em;
 				display: flex;
 				flex-direction: column;
 				gap: 1em;
+				position: relative;
 			}
 			.status-row {
 				display: flex;
@@ -107,21 +107,59 @@
 				outline: none;
 			}
 			.error {
-				background: #23272e;
-				color: #e0e0e0;
-				border-radius: 4px;
-				padding: 0.7em;
-				margin-top: 0.5em;
-				font-size: 0.97em;
-				min-height: 1.2em;
-				word-break: break-all;
+				position: absolute;
+				left: 16px;
+				right: 16px;
+				margin: 0 auto;
+				top: 1em;
+				background: #e74c3c;
+				color: #fff;
+				padding: 0.5em 1.5em 0.5em 1em;
+				border-radius: 6px;
+				font-size: 0.98em;
+				min-width: 80px;
+				max-width: 200px;
+				box-sizing: border-box;
+				text-align: center;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.2s;
+				z-index: 100;
+				display: none;
 			}
-			.spacer {
-				flex: 1;
+			.error.visible {
+				display: block;
+				opacity: 1;
+				pointer-events: auto;
+			}
+			#error-msg {
+				user-select: all;
+				cursor: help;
+			}
+			.error .close-x {
+				position: absolute;
+				top: 0.1em;
+				right: 0.5em;
+				font-size: 1.1em;
+				color: #fff;
+				cursor: pointer;
+				transition: opacity 0.15s;
+				background: none;
+				border: none;
+				padding: 0;
+				z-index: 101;
+			}
+			.error .close-x:hover {
+				color: #000000;
 			}
 		</style>
 	</head>
 	<body>
+		<div class="error" id="error">
+			<button class="close-x" id="error-x" title="Close">&#x2716;</button>
+			<div id="error-msg"></div>
+		</div>
 		<div class="container">
 			<div class="status-row">
 				<span class="label">Connection</span>
@@ -152,7 +190,6 @@
 				</button>
 				<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
 			</div>
-			<div class="error" id="error"></div>
 		</div>
 		<script>
 			function fetchStatus() {
@@ -191,9 +228,7 @@
 				if (document.activeElement !== delayInput) {
 					delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
 				}
-				console.log('Setting delay input value:', delayInput.value);
 				delayInput.disabled = data.STATE != 'REALTIME';
-				console.log('Setting delay input value:', data.STATE, data.STATE != 'REALTIME', delayInput.disabled);
 				document.getElementById('set-delay').disabled = delayInput.disabled;
 				// Connection (dummy for now)
 				const connDot = document.getElementById('conn-dot');
@@ -203,8 +238,20 @@
 				connStatus.textContent = 'OK';
 			}
 			function showError(msg) {
-				document.getElementById('error').textContent = msg;
+				const errorDiv = document.getElementById('error');
+				const errorMsg = document.getElementById('error-msg');
+				errorMsg.textContent = msg;
+				if (msg) {
+					errorDiv.classList.add('visible');
+				} else {
+					errorDiv.classList.remove('visible');
+					errorMsg.textContent = '';
+				}
 			}
+			// Dismiss error on X
+			const errorX = document.getElementById('error-x');
+			if (errorX) errorX.onclick = () => showError('');
+
 			function updateAll() {
 				fetchStatus().then(data => setStatusUI(data));
 			}
