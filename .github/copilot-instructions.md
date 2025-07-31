@@ -57,3 +57,10 @@ This project is a Node.js application (Yarn-based) that acts as a proxy between 
 -  Never modify `copyof-node-media-server/`.
 -  Follow the separation of concerns as described above.
 -  Reference the HTML homepage (`ApiServer.simplePage`) for available API endpoints.
+
+**User confirmations:**
+
+-  There is no button interface for confirmations in this chat. Whenever you ask the user for confirmation or a choice (e.g., "Would you like me to..."), always suggest a quick reply template for the user to copy and send, such as:
+   -  "Reply with 'yes' to confirm or 'no' to cancel."
+   -  "Type 'proceed' to continue or 'cancel' to abort."
+      This helps streamline the confirmation process for the user.

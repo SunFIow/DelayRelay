@@ -5,4 +5,5 @@ const apiServer = new ApiServer();
 apiServer.run();
 
 const relayServer = new RelayServer();
+apiServer.relayServer = relayServer;
 relayServer.run();

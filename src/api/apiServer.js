@@ -23,8 +23,21 @@ export class ApiServer {
 		});
 	}
 
-	/** Sends a simple HTML page with links to API endpoints */
-	simplePage(req, res) {
+	requestHandler(req, res) {
+		const request_done = this.endpoints(req, res);
+		if (request_done) return;
+
+		// UI page
+		if (req.method === 'GET' && req.url === '/ui') {
+			return this.sendPage(res, 'relay-ui.html');
+		}
+
+		// Controls page
+		this.sendPage(res, 'relay-controls.html');
+	}
+
+	endpoints(req, res) {
+		// /set-local-port?port=8888
 		if (req.method === 'GET' && req.url.startsWith('/set-local-port')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
@@ -37,7 +50,7 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid port parameter. Usage: "/set-local-port?port=1935"\n');
 			}
-			return;
+			return true;
 		}
 		// /set-delay?ms=15000
 		if (req.method === 'GET' && req.url.startsWith('/set-delay')) {
@@ -52,7 +65,7 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid ms parameter. Usage: "/set-delay?ms=15000" (for 15s)\n');
 			}
-			return;
+			return true;
 		}
 		// /activate-delay
 		if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
@@ -61,7 +74,7 @@ export class ApiServer {
 			LOGGER.info(`Delay activated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay activated\n`);
-			return;
+			return true;
 		}
 		// /deactivate-delay
 		if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
@@ -69,7 +82,7 @@ export class ApiServer {
 			LOGGER_API.info(`Delay deactivated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay deactivated\n`);
-			return;
+			return true;
 		}
 		// /set-remote-url?url=live.twitch.tv
 		if (req.method === 'GET' && req.url.startsWith('/set-remote-url')) {
@@ -84,7 +97,7 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid url parameter. Usage: "/set-remote-url?url=live.twitch.tv"\n');
 			}
-			return;
+			return true;
 		}
 		// /set-rtmp-port?port=1935
 		if (req.method === 'GET' && req.url.startsWith('/set-rtmp-port')) {
@@ -99,7 +112,7 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid port parameter. Usage: "/set-rtmp-port?port=1935"\n');
 			}
-			return;
+			return true;
 		}
 		// /set-latency?ms=10
 		if (req.method === 'GET' && req.url.startsWith('/set-latency')) {
@@ -114,7 +127,7 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid ms parameter. Usage: "/set-latency?ms=10"\n');
 			}
-			return;
+			return true;
 		}
 		// /set-max-chunks?chunks=10000
 		if (req.method === 'GET' && req.url.startsWith('/set-max-chunks')) {
@@ -129,7 +142,7 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid chunks parameter. Usage: "/set-max-chunks?chunks=10000"\n');
 			}
-			return;
+			return true;
 		}
 		// /set-max-bytes?bytes=52428800
 		if (req.method === 'GET' && req.url.startsWith('/set-max-bytes')) {
@@ -144,69 +157,71 @@ export class ApiServer {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end('Invalid bytes parameter. Usage: "/set-max-bytes?bytes=52428800"\n');
 			}
-			return;
+			return true;
 		}
+
+		// /start-server
+		if (req.method === 'GET' && req.url === '/start-server') {
+			if (config.server) {
+				if (config.serverRunning) {
+					res.writeHead(200, { 'Content-Type': 'text/plain' });
+					res.end('Relay server is already running.\n');
+				} else {
+					config.server.run();
+					LOGGER_API.info('Relay server started via API');
+					res.writeHead(200, { 'Content-Type': 'text/plain' });
+					res.end('Relay server started.\n');
+				}
+			} else {
+				res.writeHead(500, { 'Content-Type': 'text/plain' });
+				res.end('Relay server instance not available.\n');
+			}
+			return true;
+		}
+
+		// /stop-server
+		if (req.method === 'GET' && req.url === '/stop-server') {
+			if (config.server) {
+				if (!config.serverRunning) {
+					res.writeHead(200, { 'Content-Type': 'text/plain' });
+					res.end("Relay server isn't running.\n");
+				} else {
+					config.server.close(() => {
+						LOGGER_API.info('Relay server stopped via API');
+						res.writeHead(200, { 'Content-Type': 'text/plain' });
+						res.end('Relay server stopped.\n');
+					});
+				}
+			} else {
+				res.writeHead(500, { 'Content-Type': 'text/plain' });
+				res.end('Relay server instance not available.\n');
+			}
+			return true;
+		}
+
 		// /status
 		if (req.method === 'GET' && req.url === '/status') {
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(config.toString());
-			return;
+			return true;
 		}
 
-		res.writeHead(200, { 'Content-Type': 'text/html' });
-		res.end(`
-	  <!DOCTYPE html>
-	  <html>
-	  <head>
-		<title>RTMP Delay Relay</title>
-	  </head>
-	  <body>
-		<h1>RTMP Delay Relay</h1>
-		<p>API is running. Use the endpoints to control the proxy.</p>
-		<ul>
-		  <li><a href="/status">Status</a></li>
-		  <li><a href="/set-local-port?port=8888">Set Local Port</a></li>
-		  <li><a href="/set-delay?ms=10000">Set Stream Delay</a></li>
-		  <li><a href="/activate-delay">Activate Delay</a></li>
-		  <li><a href="/deactivate-delay">Deactivate Delay</a></li>
-		  <li><a href="/set-remote-url?url=live.twitch.tv">Set Remote RTMP URL</a></li>
-		  <li><a href="/set-rtmp-port?port=1935">Set Remote RTMP Port</a></li>
-		  <li><a href="/set-latency?ms=10">Set Latency Interval</a></li>
-		  <li><a href="/set-max-chunks?chunks=10000">Set Max Buffer Chunks</a></li>
-		  <li><a href="/set-max-bytes?bytes=52428800">Set Max Buffer Bytes</a></li>
-		</ul>
-		<p><a href="/ui"><b>Try the improved UI</b></a></p>
-	  </body>
-	  </html>
-	`);
+		return false; // No matching endpoint found
 	}
 
-	/** Sends the improved HTML UI from a static file */
-	improvedUIPage(req, res) {
-		// __dirname workaround for ES6 modules
+	sendPage(res, fileName) {
 		const __filename = fileURLToPath(import.meta.url);
 		const __dirname = path.dirname(__filename);
-		const filePath = path.join(__dirname, 'relay-ui.html');
+		const filePath = path.join(__dirname, fileName);
 		fs.readFile(filePath, 'utf8', (err, data) => {
 			if (err) {
+				LOGGER_API.error(`Failed to read file ${filePath}: ${err.message}`);
 				res.writeHead(500, { 'Content-Type': 'text/plain' });
-				res.end('Failed to load UI page.');
+				res.end('Internal Server Error');
 				return;
 			}
 			res.writeHead(200, { 'Content-Type': 'text/html' });
 			res.end(data);
 		});
-	}
-
-	requestHandler(req, res) {
-		// /set-local-port?port=8888
-
-		// Improved UI endpoint
-		if (req.method === 'GET' && req.url === '/ui') {
-			this.improvedUIPage(req, res);
-			return;
-		}
-
-		this.simplePage(req, res);
 	}
 }

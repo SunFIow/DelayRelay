@@ -2,28 +2,15 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<title>RTMP Delay Relay - Control Panel</title>
+		<title>DelayRelay OBS Dock</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<style>
 			:root {
-				--bg: #fff;
-				--fg: #222;
-				--input-bg: #fff;
-				--input-fg: #222;
-				--input-border: #222;
-				--button-bg: #e0e0e0;
-				--button-fg: #222;
-				--button-border: #bbb;
-				--button-hover-bg: #b3d1ff;
-				--button-hover-fg: #111;
-				--button-hover-border: #3399ff;
-				--result-bg: #f4f4f4;
-				--result-fg: #222;
-			}
-
-			body.dark-mode {
 				--bg: #181a1b;
 				--fg: #e0e0e0;
+				--accent: #3399ff;
+				--danger: #e74c3c;
+				--success: #27ae60;
 				--input-bg: #23272e;
 				--input-fg: #e0e0e0;
 				--input-border: #444;
@@ -33,42 +20,78 @@
 				--button-hover-bg: #2d3a4a;
 				--button-hover-fg: #fff;
 				--button-hover-border: #3399ff;
-				--result-bg: #23272e;
-				--result-fg: #e0e0e0;
 			}
-
+			html,
 			body {
-				font-family: sans-serif;
-				margin: 1em;
 				background: var(--bg);
 				color: var(--fg);
+				font-family: system-ui, sans-serif;
+				margin: 0;
+				padding: 0;
+				min-width: 220px;
+				min-height: 180px;
+				font-size: 15px;
 			}
-			form {
-				margin-bottom: 1.5em;
+			.container {
+				padding: 1em 1.2em 0.5em 1.2em;
+				display: flex;
+				flex-direction: column;
+				gap: 1em;
 			}
-			label {
+			.status-row {
+				display: flex;
+				align-items: center;
+				gap: 0.7em;
+				flex-wrap: wrap;
+			}
+			.icon {
+				width: 1.3em;
+				height: 1.3em;
+				vertical-align: middle;
 				display: inline-block;
-				width: 180px;
-				font-weight: 600;
 			}
-			input[type='number'],
-			input[type='text'] {
-				width: 120px;
+			.status-dot {
+				width: 0.9em;
+				height: 0.9em;
+				border-radius: 50%;
+				display: inline-block;
+				margin-right: 0.3em;
+				background: var(--danger);
+			}
+			.status-dot.active {
+				background: var(--success);
+			}
+			.label {
+				font-size: 0.98em;
+				opacity: 0.7;
+				margin-right: 0.3em;
+			}
+			.delay-edit {
+				display: flex;
+				align-items: center;
+				gap: 0.3em;
+			}
+			input[type='number'] {
+				width: 4em;
 				background: var(--input-bg);
 				color: var(--input-fg);
 				border: 1.5px solid var(--input-border);
 				border-radius: 4px;
-				padding: 0.4em 0.9em;
+				padding: 0.2em 0.5em;
+				font-size: 1em;
 			}
 			button {
-				margin-left: 10px;
 				background: var(--button-bg);
 				color: var(--button-fg);
 				border: 1px solid var(--button-border);
 				border-radius: 4px;
-				padding: 0.4em 0.9em;
+				padding: 0.3em 0.8em;
 				cursor: pointer;
+				font-size: 1em;
 				transition: background 0.2s, color 0.2s, border 0.2s;
+				display: flex;
+				align-items: center;
+				gap: 0.3em;
 			}
 			button:hover,
 			button:focus-visible {
@@ -77,95 +100,129 @@
 				border: 1.5px solid var(--button-hover-border);
 				outline: none;
 			}
-			.row {
-				margin-bottom: 0.5em;
-
-				> * {
-					margin-bottom: 0.5em;
-				}
-			}
-			#result {
-				background: var(--result-bg);
-				color: var(--result-fg);
-				padding: 1em;
-				margin-top: 1em;
+			.result {
+				background: #23272e;
+				color: #e0e0e0;
 				border-radius: 4px;
+				padding: 0.7em;
+				margin-top: 0.5em;
+				font-size: 0.97em;
+				min-height: 1.2em;
+				word-break: break-all;
+			}
+			.spacer {
+				flex: 1;
 			}
 		</style>
-		<script>
-			function apiCall(path) {
-				fetch(path)
-					.then(resp => {
-						const contentType = resp.headers.get('content-type') || '';
-						if (contentType.includes('application/json')) {
-							return resp.json().then(data => ({ type: 'json', data }));
-						} else {
-							return resp.text().then(data => ({ type: 'text', data }));
-						}
-					})
-					.then(result => {
-						if (result.type === 'json') {
-							document.getElementById('result').textContent = JSON.stringify(result.data, null, 2);
-						} else {
-							document.getElementById('result').textContent = result.data;
-						}
-					})
-					.catch(err => {
-						document.getElementById('result').textContent = 'Error: ' + err;
-					});
-			}
-			function submitForm(event, path, param) {
-				event.preventDefault();
-				var val = event.target.elements[param].value;
-				var url = path + '?' + param + '=' + encodeURIComponent(val);
-				apiCall(url);
-			}
-			function toggleDarkMode() {
-				document.body.classList.toggle('dark-mode');
-				localStorage.setItem('relay-ui-dark', document.body.classList.contains('dark-mode'));
-			}
-			window.addEventListener('DOMContentLoaded', () => {
-				let darkMode = localStorage.getItem('relay-ui-dark');
-				// Check if dark mode got saved to localStorage
-				// if not load the system preference
-				const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
-				if (darkMode === null) {
-					darkMode = prefersDarkScheme.matches ? 'true' : 'false';
-				}
-				if (darkMode === 'true') {
-					document.body.classList.add('dark-mode');
-				}
-			});
-		</script>
 	</head>
 	<body>
-		<div class="row">
-			<button onclick="apiCall('/activate-delay')">Activate Delay</button>
-			<button onclick="apiCall('/deactivate-delay')">Deactivate Delay</button>
-			<button onclick="apiCall('/status')">Show Status</button>
-			<button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+		<div class="container">
+			<div class="status-row">
+				<span class="label">Server</span>
+				<span id="server-dot" class="status-dot"></span>
+				<span id="server-status">...</span>
+				<button id="toggle-server" title="Start/Stop Server">
+					<span id="server-icon" class="icon">&#x23F5;</span>
+				</button>
+			</div>
+			<div class="status-row">
+				<span class="label">Delay</span>
+				<span id="delay-dot" class="status-dot"></span>
+				<span id="delay-status">...</span>
+				<button id="toggle-delay" title="Activate/Deactivate Delay">
+					<span id="delay-icon" class="icon">&#x23F8;</span>
+				</button>
+			</div>
+			<div class="status-row">
+				<span class="label">Delay (s)</span>
+				<div class="delay-edit">
+					<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
+					<button id="set-delay" title="Set Delay">
+						<span class="icon">&#x2714;</span>
+					</button>
+				</div>
+			</div>
+			<div class="status-row">
+				<span class="label">Connection</span>
+				<span id="conn-dot" class="status-dot"></span>
+				<span id="conn-status">...</span>
+			</div>
+			<div class="result" id="result"></div>
 		</div>
-		<form onsubmit="submitForm(event, '/set-local-port', 'port')">
-			<div class="row"><label>Local Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 8888" /><button type="submit">Set</button></div>
-		</form>
-		<form onsubmit="submitForm(event, '/set-delay', 'ms')">
-			<div class="row"><label>Stream Delay (ms):</label><input name="ms" type="number" min="1" required placeholder="e.g. 10000" /><button type="submit">Set</button></div>
-		</form>
-		<form onsubmit="submitForm(event, '/set-remote-url', 'url')">
-			<div class="row"><label>Remote RTMP URL:</label><input name="url" type="text" required placeholder="e.g. live.twitch.tv" /><button type="submit">Set</button></div>
-		</form>
-		<form onsubmit="submitForm(event, '/set-rtmp-port', 'port')">
-			<div class="row"><label>Remote RTMP Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 1935" /><button type="submit">Set</button></div>
-		</form>
-		<form onsubmit="submitForm(event, '/set-latency', 'ms')">
-			<div class="row"><label>Latency Interval (ms):</label><input name="ms" type="number" min="1" required placeholder="e.g. 10" /><button type="submit">Set</button></div>
-		</form>
-		<form onsubmit="submitForm(event, '/set-max-chunks', 'chunks')">
-			<div class="row"><label>Max Buffer Chunks:</label><input name="chunks" type="number" min="1" required placeholder="e.g. 10000" /><button type="submit">Set</button></div>
-		</form>
-		<form onsubmit="submitForm(event, '/set-max-bytes', 'bytes')">
-			<div class="row"><label>Max Buffer Bytes:</label><input name="bytes" type="number" min="1" required placeholder="e.g. 52428800" /><button type="submit">Set</button></div>
-		</form>
-		<pre id="result"></pre>
+		<script>
+			function fetchStatus() {
+				return fetch('/status').then(r => r.json());
+			}
+			function setStatusUI(data) {
+				// Server
+				const serverDot = document.getElementById('server-dot');
+				const serverStatus = document.getElementById('server-status');
+				const serverIcon = document.getElementById('server-icon');
+				if (data.serverRunning) {
+					serverDot.classList.add('active');
+					serverStatus.textContent = 'Running';
+					serverIcon.textContent = '\u23F9'; // Stop icon
+				} else {
+					serverDot.classList.remove('active');
+					serverStatus.textContent = 'Stopped';
+					serverIcon.textContent = '\u23F5'; // Play icon
+				}
+				// Delay
+				const delayDot = document.getElementById('delay-dot');
+				const delayStatus = document.getElementById('delay-status');
+				const delayIcon = document.getElementById('delay-icon');
+				if (data.STATE === 'DELAY' || data.STATE === 'REWIND') {
+					delayDot.classList.add('active');
+					delayStatus.textContent = 'Active';
+					delayIcon.textContent = '\u23F8'; // Pause icon
+				} else {
+					delayDot.classList.remove('active');
+					delayStatus.textContent = 'Inactive';
+					delayIcon.textContent = '\u25B6'; // Play icon
+				}
+				// Delay ms
+				const delayInput = document.getElementById('delay-ms');
+				delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
+				delayInput.disabled = data.STATE !== 'REALTIME';
+				document.getElementById('set-delay').disabled = delayInput.disabled;
+				// Connection (dummy for now)
+				const connDot = document.getElementById('conn-dot');
+				const connStatus = document.getElementById('conn-status');
+				// You can update this with real connection info if available
+				connDot.classList.add('active');
+				connStatus.textContent = 'OK';
+			}
+			function showResult(msg) {
+				document.getElementById('result').textContent = msg;
+			}
+			function updateAll() {
+				fetchStatus().then(data => setStatusUI(data));
+			}
+			document.getElementById('toggle-server').onclick = function () {
+				fetchStatus().then(data => {
+					const endpoint = data.serverRunning ? '/stop-server' : '/start-server';
+					fetch(endpoint).then(() => updateAll());
+				});
+			};
+			document.getElementById('toggle-delay').onclick = function () {
+				fetchStatus().then(data => {
+					const endpoint = data.STATE === 'DELAY' || data.STATE === 'REWIND' ? '/deactivate-delay' : '/activate-delay';
+					fetch(endpoint).then(() => updateAll());
+				});
+			};
+			document.getElementById('set-delay').onclick = function () {
+				const val = document.getElementById('delay-ms').value;
+				if (!val || isNaN(val) || val < 1) {
+					showResult('Invalid delay value.');
+					return;
+				}
+				fetch(`/set-delay?ms=${parseInt(val, 10) * 1000}`)
+					.then(() => updateAll())
+					.catch(() => showResult('Failed to set delay.'));
+			};
+			// Initial load and periodic refresh
+			updateAll();
+			setInterval(updateAll, 3000);
+		</script>
 	</body>
 </html>
