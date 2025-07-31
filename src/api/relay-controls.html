@@ -136,8 +136,8 @@
 					.then(resp => resp.json())
 					.then(data => {
 						const btn = document.getElementById('toggle-delay-btn');
-						if (data && data.STATE !== undefined) {
-							if (data.STATE !== 'DELAY') {
+						if (data && data.state !== undefined) {
+							if (data.state !== 'DELAY') {
 								btn.textContent = 'Deactivate Delay';
 								btn.dataset.delayActive = 'true';
 							} else {

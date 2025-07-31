@@ -3,12 +3,12 @@ const CONFIG_PATH = './config.json';
 
 export class Config {
 	constructor() {
-		this._TESTING = false; // Set to true for local testing
+		this.TESTING = false; // Set to true for local testing
 		this.API_PORT = 8080; // Local port for the API server
-		this._server = null; // Will hold the server instance
-		this._serverRunning = false; // Track if the relay server is running
-		this._clientConnected = false; // Track If the client is connected to the remote server
-		this._STATE = 'REALTIME'; // Initial state
+		this.server = null; // Will hold the server instance
+		this.serverRunning = false; // Track if the relay server is running
+		this.clientConnected = false; // Track If the client is connected to the remote server
+		this.state = 'REALTIME'; // Initial state
 
 		this._LOCAL_PORT = 8888; // Local port for the proxy server
 		this._STREAM_DELAY_MS = 30_000; // 30 seconds delay
@@ -70,13 +70,6 @@ export class Config {
 		});
 	}
 
-	get TESTING() {
-		return this._TESTING;
-	}
-	set TESTING(v) {
-		this._TESTING = v;
-	}
-
 	get LOCAL_PORT() {
 		return this._LOCAL_PORT;
 	}
@@ -85,40 +78,12 @@ export class Config {
 		this.saveToDisk();
 	}
 
-	get server() {
-		return this._server;
-	}
-	set server(v) {
-		this._server = v;
-	}
-
-	get serverRunning() {
-		return this._serverRunning;
-	}
-	set serverRunning(v) {
-		this._serverRunning = v;
-	}
-
-	get clientConnected() {
-		return this._clientConnected;
-	}
-	set clientConnected(v) {
-		this._clientConnected = v;
-	}
-
 	get STREAM_DELAY_MS() {
 		return this._STREAM_DELAY_MS;
 	}
 	set STREAM_DELAY_MS(v) {
 		this._STREAM_DELAY_MS = v;
 		this.saveToDisk();
-	}
-
-	get STATE() {
-		return this._STATE;
-	}
-	set STATE(v) {
-		this._STATE = v;
 	}
 
 	get REMOTE_RTMP_URL() {

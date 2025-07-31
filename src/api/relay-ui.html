@@ -217,7 +217,7 @@
 				// Delay
 				const delayDot = document.getElementById('delay-dot');
 				const delayIcon = document.getElementById('delay-icon');
-				if (data.STATE === 'DELAY' || data.STATE === 'REWIND') {
+				if (data.state === 'DELAY') {
 					delayDot.classList.add('active');
 					delayIcon.textContent = '\u23F8'; // Pause icon
 				} else {
@@ -231,7 +231,7 @@
 					delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
 					delayInput.dispatchEvent(new Event('change'));
 				}
-				delayInput.disabled = data.STATE != 'REALTIME';
+				delayInput.disabled = data.state !== 'REALTIME';
 				document.getElementById('set-delay').disabled = delayInput.disabled;
 				// Connection
 				const connDot = document.getElementById('conn-dot');
@@ -264,7 +264,7 @@
 			};
 			document.getElementById('toggle-delay').onclick = function () {
 				fetchStatus().then(data => {
-					const endpoint = data.STATE === 'DELAY' || data.STATE === 'REWIND' ? '/deactivate-delay' : '/activate-delay';
+					const endpoint = data.state === 'DELAY' ? '/deactivate-delay' : '/activate-delay';
 					fetch(endpoint).then(() => updateAll());
 				});
 			};
