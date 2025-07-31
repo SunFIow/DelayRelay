@@ -26,8 +26,8 @@ import { CodecType, PacketFlags } from './parsing.js';
 /**
  * @class
  * @property {number} CURRENT_ID - Unique ID for each chunk
- * @property {ChunkData[]} buffer
- * @property {ChunkData[]} delayBuffer
+ * @property {ChunkData[]} buffer - Chunks currently in the buffer
+ * @property {ChunkData[]} delayBuffer - Rolling window of chunks from the last N ms
  * @property {boolean} isDelayBufferActive - Whether the delay buffer is currently active
  * @property {number} totalLength - Total length of all chunks in bytes
  * @property {boolean} paused - Whether the buffer is paused
@@ -62,7 +62,7 @@ export class StreamBuffer {
 			if (typeof socket.pause === 'function' && !this.paused) {
 				socket.pause();
 				this.paused = true;
-				if (config.STATE !== 'REWIND') {
+				if (config.state !== 'REWIND') {
 					LOGGER.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
 				} else {
 					LOGGER.warn(`[Memory] Buffer limit reached while buffering. Pausing OBS input. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
@@ -121,19 +121,19 @@ export class StreamBuffer {
 	 * @returns {Array<{chunk: Buffer, time: number, id: number}>}
 	 */
 	popReadyChunks() {
-		if (config.STATE === 'REWIND') {
+		if (config.state === 'REWIND') {
 			this.handleRewinding();
-			config.STATE = 'DELAY';
+			config.state = 'DELAY';
 		}
-		if (config.STATE === 'FORWARD') {
+		if (config.state === 'FORWARD') {
 			this.handleForwarding();
-			config.STATE = 'REALTIME';
+			config.state = 'REALTIME';
 		}
 
 		const readyChunks = [];
 		const now = Date.now();
 
-		while (this.buffer.length > 0 && (config.STATE === 'REALTIME' || now - this.buffer[0].time > config.STREAM_DELAY_MS)) {
+		while (this.buffer.length > 0 && (config.state === 'REALTIME' || now - this.buffer[0].time > config.STREAM_DELAY_MS)) {
 			const buf = this.buffer.shift();
 			readyChunks.push(buf);
 			this.totalLength -= buf.chunk.length;
@@ -152,8 +152,12 @@ export class StreamBuffer {
 		return readyChunks;
 	}
 
+	/**
+	 * Removes chunks from delayBuffer that are older than STREAM_DELAY_MS.
+	 * Ensures the buffer starts at a key frame for clean playback.
+	 */
 	updateDelayBuffer(now) {
-		if (config.STATE === 'REWIND') return;
+		if (config.state === 'REWIND') return;
 		while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
 			// Remove chunks until we find a key frame or the buffer is empty
 			let skipSameKeyFrame = this.delayBuffer[0].keyFrame;

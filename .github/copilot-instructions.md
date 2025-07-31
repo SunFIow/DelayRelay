@@ -1,34 +1,33 @@
 # Copilot Instructions for DelayRelay
 
-This project is a Node.js application (Yarn-based) that acts as a proxy between OBS and Twitch to add a stream delay without restarting the stream. It is designed for reliability, protocol compliance, and runtime configurability.
+This project is a Node.js RTMP proxy that adds a configurable stream delay between OBS and Twitch, without requiring a stream restart. It is designed for reliability, protocol compliance, and runtime configurability. All code uses Yarn and ES6 modules.
 
 ## Architecture Overview
 
--  **RelayServer** (`src/relayServer.js`): Listens for incoming RTMP connections from OBS. For each connection, creates a `Connection` instance.
--  **Connection** (`src/connections/connection.js`): Handles a single OBS client connection. Manages sockets to Twitch, parses RTMP protocol, relays RTMP chunks, and can buffer data for delay if enabled.
--  **RtmpConnection** (`src/connections/rtmpConnection.js`): Uses the `copyof-node-media-server` library for RTMP protocol parsing and handshake.
--  **StreamBuffer** (`src/streamBuffer.js`): Buffers RTMP chunks for delay, manages memory limits and delay logic.
--  **ApiServer** (`src/apiServer.js`): HTTP API for runtime configuration (e.g., changing delay duration, querying status, activating/deactivating delay). Endpoints are documented in the HTML homepage and code comments.
--  **config.js**: Central configuration for ports, delay, buffer limits, and state. Exposes a `toString()` method for status reporting.
--  **logger.js**: Centralized logging utility for diagnostics and monitoring.
+-  **RelayServer** (`src/relayServer.js`): Listens for incoming RTMP connections from OBS. Creates a `Connection` for each client.
+-  **Connection** (`src/connections/connection.js`): Manages a single OBS client, relays RTMP chunks, and handles buffering for delay.
+-  **RtmpConnection** (`src/connections/rtmpConnection.js`): Integrates with `copyof-node-media-server` for RTMP protocol parsing/handshake. **Never modify `copyof-node-media-server/`.**
+-  **StreamBuffer** (`src/streamBuffer.js`): Implements all buffering and delay logic, enforcing chunk/byte limits.
+-  **ApiServer** (`src/apiServer.js`): Exposes an HTTP API for runtime configuration (delay, ports, remote URL, status, etc.). Endpoints are documented in the homepage and code comments.
+-  **config.js**: Central config for ports, delay, buffer limits, and state. All runtime state is managed here and updated via the API.
+-  **logger.js**: Centralized logging utility. Use `LOGGER` and `LOGGER_API` for diagnostics; logs are written to `logs/`.
 
--## Key Patterns & Conventions
+## Key Patterns & Conventions
 
--  **ES6 Modules**: All source files use ES6 module syntax (`import`/`export`). Use this style for all new code and imports.
-
--  **RTMP Protocol Handling**: All protocol parsing and handshake logic is delegated to the open-source `node-media-server` (see `copyof-node-media-server/`). Do not modify this folder; it is a direct copy for integration only.
--  **Dynamic Configuration**: All runtime settings (ports, delay, buffer sizes, etc.) are managed via the HTTP API (`ApiServer`). Example: `GET /set-delay?ms=15000` sets a 15s delay.
--  **State Management**: The `config` object holds all mutable runtime state. Changing config values via the API updates behavior immediately.
--  **Logging**: Use `LOGGER` and `LOGGER_API` for all diagnostics. Log files are written to the `logs/` directory.
--  **Buffering/Delay**: The `StreamBuffer` class is responsible for all buffering and delay logic. It enforces both chunk and byte limits.
--  **Testing/Debugging**: Dummy RTMP servers are provided in `test/` for local testing. Use these to simulate OBS/Twitch endpoints.
+-  **ES6 Modules**: All source files use ES6 `import`/`export` syntax.
+-  **Dynamic Configuration**: All runtime settings (ports, delay, buffer sizes, etc.) are managed via the HTTP API (`ApiServer`). Never hardcode config values; always use the API for changes.
+-  **State Management**: The `config` object holds all mutable runtime state. API changes update behavior immediately.
+-  **Logging**: Use only the provided logger utilities. Log files are in `logs/`.
+-  **Buffering/Delay**: All buffering logic is in `StreamBuffer`. Do not duplicate delay logic elsewhere.
+-  **Testing/Debugging**: Use scripts in `test/` to simulate OBS/Twitch endpoints. Dummy RTMP servers are provided for local testing.
 
 ## Developer Workflows
 
--  **Start the API server**: `yarn start` (see `package.json` for entry point)
--  **Configure at runtime**: Use the HTTP API (see `/status` endpoint or homepage for available commands)
--  **Logs**: Check `logs/` for `api_*.log` and `relay_*.log` for diagnostics
--  **Testing**: Use scripts in `test/` to simulate RTMP traffic
+-  **Install dependencies**: `yarn install`
+-  **Start the API server**: `yarn start` (entry: `src/index.js`)
+-  **Configure at runtime**: Use the HTTP API (see `/status` endpoint or homepage for commands)
+-  **Logs**: Check `logs/` for `api_*.log` and `relay_*.log`, the `*_latest.log` files contain the most recent logs and are at the root.
+-  **Testing**: Use `test/` scripts to simulate RTMP traffic
 
 ## Integration Points
 
@@ -56,7 +55,7 @@ This project is a Node.js application (Yarn-based) that acts as a proxy between 
 -  Always use the HTTP API for runtime changes; do not hardcode config values.
 -  Never modify `copyof-node-media-server/`.
 -  Follow the separation of concerns as described above.
--  Reference the HTML homepage (`ApiServer.simplePage`) for available API endpoints.
+-  Reference the HTTP API (`ApiServer.endpoints`) for available API endpoints.
 
 **User confirmations:**
 

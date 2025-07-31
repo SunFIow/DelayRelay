@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { LOGGER } from './logger';
 const CONFIG_PATH = './config.json';
 
 export class Config {
@@ -32,7 +33,7 @@ export class Config {
 				}
 			}
 		} catch (e) {
-			console.error('Failed to load config from disk:', e);
+			LOGGER.error('Failed to load config from disk:', e);
 		}
 	}
 
@@ -51,17 +52,19 @@ export class Config {
 
 			fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 3), 'utf8');
 		} catch (e) {
-			console.error('Failed to save config to disk:', e);
+			LOGGER.error('Failed to save config to disk:', e);
 		}
 	}
 
 	toString() {
 		return JSON.stringify({
 			TESTING: this.TESTING,
+			API_PORT: this.API_PORT,
 			LOCAL_PORT: this.LOCAL_PORT,
 			serverRunning: this.serverRunning,
+			clientConnected: this.clientConnected,
+			state: this.state,
 			STREAM_DELAY_MS: this.STREAM_DELAY_MS,
-			STATE: this.STATE,
 			REMOTE_RTMP_URL: this.REMOTE_RTMP_URL,
 			REMOTE_RTMP_PORT: this.REMOTE_RTMP_PORT,
 			LATENCY_INTERVAL: this.LATENCY_INTERVAL,

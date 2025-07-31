@@ -19,10 +19,14 @@
 	"license": "MIT",
 	"scripts": {
 		"start": "node src/index.js",
-		"dummy": "node test/dummy_rtmp_server.js"
+		"dummy": "node test/dummy_rtmp_server.js",
+		"test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
 	},
 	"dependencies": {
 		"node-media-server": "^4.0.18"
 	},
-	"packageManager": "yarn@1.22.19"
+	"packageManager": "yarn@1.22.19",
+	"devDependencies": {
+		"jest": "^30.0.5"
+	}
 }
