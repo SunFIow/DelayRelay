@@ -5,13 +5,11 @@ import { fileURLToPath } from 'url';
 
 import { LOGGER, LOGGER_API } from '../logger.js';
 
-const HTTP_API_PORT = 8080;
-
 import { config } from '../config.js';
 
 export class ApiServer {
 	constructor() {
-		this.port = HTTP_API_PORT;
+		this.port = config.API_PORT;
 		this.server = http.createServer((req, res) => this.requestHandler(req, res));
 	}
 
