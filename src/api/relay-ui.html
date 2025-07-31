@@ -66,19 +66,24 @@
 				opacity: 0.7;
 				margin-right: 0.3em;
 			}
-			.delay-edit {
-				display: flex;
-				align-items: center;
-				gap: 0.3em;
+			.w40 {
+				width: 40px;
 			}
 			input[type='number'] {
-				width: 4em;
+				width: 3em;
 				background: var(--input-bg);
 				color: var(--input-fg);
 				border: 1.5px solid var(--input-border);
 				border-radius: 4px;
 				padding: 0.3em 0.8em;
 				font-size: 1em;
+				-moz-appearance: textfield;
+				appearance: textfield;
+			}
+			input[type='number']::-webkit-inner-spin-button,
+			input[type='number']::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
 			}
 
 			button {
@@ -101,7 +106,7 @@
 				border: 1.5px solid var(--button-hover-border);
 				outline: none;
 			}
-			.result {
+			.error {
 				background: #23272e;
 				color: #e0e0e0;
 				border-radius: 4px;
@@ -124,7 +129,7 @@
 				<span id="conn-status">...</span>
 			</div>
 			<div class="status-row">
-				<span class="label">Server</span>
+				<span class="label w40">Server</span>
 				<span id="server-dot" class="status-dot"></span>
 				<button id="toggle-server" title="Start/Stop Server">
 					<span id="server-icon" class="icon">&#x23F5;</span>
@@ -133,7 +138,7 @@
 			</div>
 			<div class="status-row">
 				<!-- with a white space after it -->
-				<span class="label">Delay</span>
+				<span class="label w40">Delay</span>
 				<span id="delay-dot" class="status-dot"></span>
 				<button id="toggle-delay" title="Activate/Deactivate Delay">
 					<span id="delay-icon" class="icon">&#x23F8;</span>
@@ -142,14 +147,12 @@
 			</div>
 			<div class="status-row">
 				<span class="label">Delay (s)</span>
-				<div class="delay-edit">
-					<button id="set-delay" title="Set Delay">
-						<span class="icon">&#x2714;</span>
-					</button>
-					<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
-				</div>
+				<button id="set-delay" title="Set Delay">
+					<span class="icon">&#x2714;</span>
+				</button>
+				<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
 			</div>
-			<div class="result" id="result"></div>
+			<div class="error" id="error"></div>
 		</div>
 		<script>
 			function fetchStatus() {
@@ -199,8 +202,8 @@
 				connDot.classList.add('active');
 				connStatus.textContent = 'OK';
 			}
-			function showResult(msg) {
-				document.getElementById('result').textContent = msg;
+			function showError(msg) {
+				document.getElementById('error').textContent = msg;
 			}
 			function updateAll() {
 				fetchStatus().then(data => setStatusUI(data));
@@ -220,12 +223,12 @@
 			document.getElementById('set-delay').onclick = function () {
 				const val = document.getElementById('delay-ms').value;
 				if (!val || isNaN(val) || val < 1) {
-					showResult('Invalid delay value.');
+					showError('Invalid delay value.');
 					return;
 				}
 				fetch(`/set-delay?ms=${parseInt(val, 10) * 1000}`)
 					.then(() => updateAll())
-					.catch(() => showResult('Failed to set delay.'));
+					.catch(() => showError('Failed to set delay.'));
 			};
 			// Initial load and periodic refresh
 			updateAll();
