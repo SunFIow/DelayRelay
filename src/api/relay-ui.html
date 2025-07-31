@@ -77,9 +77,10 @@
 				color: var(--input-fg);
 				border: 1.5px solid var(--input-border);
 				border-radius: 4px;
-				padding: 0.2em 0.5em;
+				padding: 0.3em 0.8em;
 				font-size: 1em;
 			}
+
 			button {
 				background: var(--button-bg);
 				color: var(--button-fg);
@@ -118,34 +119,35 @@
 	<body>
 		<div class="container">
 			<div class="status-row">
+				<span class="label">Connection</span>
+				<span id="conn-dot" class="status-dot"></span>
+				<span id="conn-status">...</span>
+			</div>
+			<div class="status-row">
 				<span class="label">Server</span>
 				<span id="server-dot" class="status-dot"></span>
-				<span id="server-status">...</span>
 				<button id="toggle-server" title="Start/Stop Server">
 					<span id="server-icon" class="icon">&#x23F5;</span>
 				</button>
+				<span id="server-status">...</span>
 			</div>
 			<div class="status-row">
+				<!-- with a white space after it -->
 				<span class="label">Delay</span>
 				<span id="delay-dot" class="status-dot"></span>
-				<span id="delay-status">...</span>
 				<button id="toggle-delay" title="Activate/Deactivate Delay">
 					<span id="delay-icon" class="icon">&#x23F8;</span>
 				</button>
+				<span id="delay-status">...</span>
 			</div>
 			<div class="status-row">
 				<span class="label">Delay (s)</span>
 				<div class="delay-edit">
-					<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
 					<button id="set-delay" title="Set Delay">
 						<span class="icon">&#x2714;</span>
 					</button>
+					<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
 				</div>
-			</div>
-			<div class="status-row">
-				<span class="label">Connection</span>
-				<span id="conn-dot" class="status-dot"></span>
-				<span id="conn-status">...</span>
 			</div>
 			<div class="result" id="result"></div>
 		</div>
@@ -165,7 +167,7 @@
 				} else {
 					serverDot.classList.remove('active');
 					serverStatus.textContent = 'Stopped';
-					serverIcon.textContent = '\u23F5'; // Play icon
+					serverIcon.textContent = '\u25B6'; // Play icon
 				}
 				// Delay
 				const delayDot = document.getElementById('delay-dot');
@@ -182,8 +184,13 @@
 				}
 				// Delay ms
 				const delayInput = document.getElementById('delay-ms');
-				delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
-				delayInput.disabled = data.STATE !== 'REALTIME';
+				// Only update value if not focused (not being edited)
+				if (document.activeElement !== delayInput) {
+					delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
+				}
+				console.log('Setting delay input value:', delayInput.value);
+				delayInput.disabled = data.STATE != 'REALTIME';
+				console.log('Setting delay input value:', data.STATE, data.STATE != 'REALTIME', delayInput.disabled);
 				document.getElementById('set-delay').disabled = delayInput.disabled;
 				// Connection (dummy for now)
 				const connDot = document.getElementById('conn-dot');

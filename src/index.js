@@ -6,4 +6,3 @@ apiServer.run();
 
 const relayServer = new RelayServer();
 apiServer.relayServer = relayServer;
-relayServer.run();
