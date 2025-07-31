@@ -55,35 +55,45 @@
 				height: 0.9em;
 				border-radius: 50%;
 				display: inline-block;
-				margin-right: 0.3em;
 				background: var(--danger);
 			}
 			.status-dot.active {
 				background: var(--success);
 			}
 			.label {
-				font-size: 0.98em;
-				opacity: 0.7;
-				margin-right: 0.3em;
+				font-size: 1em;
+				opacity: 0.9;
+				pointer-events: none;
 			}
 			.w40 {
 				width: 40px;
 			}
 			input[type='number'] {
-				width: 3em;
+				width: auto;
+				height: 32px;
+				box-sizing: border-box;
+				min-width: 2.5em;
+				max-width: 5em;
 				background: var(--input-bg);
 				color: var(--input-fg);
 				border: 1.5px solid var(--input-border);
 				border-radius: 4px;
-				padding: 0.3em 0.8em;
+				padding: 0.4em 0.4em;
 				font-size: 1em;
 				-moz-appearance: textfield;
 				appearance: textfield;
+				text-align: center;
+				transition: width 0.15s;
 			}
 			input[type='number']::-webkit-inner-spin-button,
 			input[type='number']::-webkit-outer-spin-button {
 				-webkit-appearance: none;
 				margin: 0;
+			}
+			input[type='number'].autosize {
+				min-width: 2em;
+				max-width: 8em;
+				transition: width 0.15s;
 			}
 
 			button {
@@ -164,7 +174,6 @@
 			<div class="status-row">
 				<span class="label">Connection</span>
 				<span id="conn-dot" class="status-dot"></span>
-				<span id="conn-status">...</span>
 			</div>
 			<div class="status-row">
 				<span class="label w40">Server</span>
@@ -172,7 +181,6 @@
 				<button id="toggle-server" title="Start/Stop Server">
 					<span id="server-icon" class="icon">&#x23F5;</span>
 				</button>
-				<span id="server-status">...</span>
 			</div>
 			<div class="status-row">
 				<!-- with a white space after it -->
@@ -181,14 +189,13 @@
 				<button id="toggle-delay" title="Activate/Deactivate Delay">
 					<span id="delay-icon" class="icon">&#x23F8;</span>
 				</button>
-				<span id="delay-status">...</span>
 			</div>
 			<div class="status-row">
 				<span class="label">Delay (s)</span>
+				<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
 				<button id="set-delay" title="Set Delay">
 					<span class="icon">&#x2714;</span>
 				</button>
-				<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
 			</div>
 		</div>
 		<script>
@@ -202,24 +209,19 @@
 				const serverIcon = document.getElementById('server-icon');
 				if (data.serverRunning) {
 					serverDot.classList.add('active');
-					serverStatus.textContent = 'Running';
 					serverIcon.textContent = '\u23F9'; // Stop icon
 				} else {
 					serverDot.classList.remove('active');
-					serverStatus.textContent = 'Stopped';
 					serverIcon.textContent = '\u25B6'; // Play icon
 				}
 				// Delay
 				const delayDot = document.getElementById('delay-dot');
-				const delayStatus = document.getElementById('delay-status');
 				const delayIcon = document.getElementById('delay-icon');
 				if (data.STATE === 'DELAY' || data.STATE === 'REWIND') {
 					delayDot.classList.add('active');
-					delayStatus.textContent = 'Active';
 					delayIcon.textContent = '\u23F8'; // Pause icon
 				} else {
 					delayDot.classList.remove('active');
-					delayStatus.textContent = 'Inactive';
 					delayIcon.textContent = '\u25B6'; // Play icon
 				}
 				// Delay ms
@@ -227,15 +229,14 @@
 				// Only update value if not focused (not being edited)
 				if (document.activeElement !== delayInput) {
 					delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
+					delayInput.dispatchEvent(new Event('change'));
 				}
 				delayInput.disabled = data.STATE != 'REALTIME';
 				document.getElementById('set-delay').disabled = delayInput.disabled;
-				// Connection (dummy for now)
+				// Connection
 				const connDot = document.getElementById('conn-dot');
-				const connStatus = document.getElementById('conn-status');
-				// You can update this with real connection info if available
-				connDot.classList.add('active');
-				connStatus.textContent = 'OK';
+				if (data.clientConnected) connDot.classList.add('active');
+				else connDot.classList.remove('active');
 			}
 			function showError(msg) {
 				const errorDiv = document.getElementById('error');
@@ -280,6 +281,23 @@
 			// Initial load and periodic refresh
 			updateAll();
 			setInterval(updateAll, 3000);
+
+			function autosizeInput(input) {
+				input.classList.add('autosize');
+				input.style.width = 1.5 + (input.value.length || input.placeholder.length) * 0.55 + 'em';
+			}
+
+			// Autosize delay-ms input
+			const delayInput = document.getElementById('delay-ms');
+			// Initial autosize
+			autosizeInput(delayInput);
+
+			delayInput.addEventListener('input', function (evt) {
+				autosizeInput(delayInput);
+			});
+			delayInput.addEventListener('change', function (evt) {
+				autosizeInput(delayInput);
+			});
 		</script>
 	</body>
 </html>

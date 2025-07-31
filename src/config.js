@@ -5,6 +5,7 @@ export class Config {
 		this.LOCAL_PORT = 8888; // Local port for the proxy server
 		this.server = null; // Will hold the server instance
 		this.serverRunning = false; // Track if the relay server is running
+		this.clientConnected = false; // Track If the client is connected to the remote server
 		this.STREAM_DELAY_MS = 30_000; // 30 seconds delay
 		/**@type {"REALTIME" | "REWIND" | "DELAY" | "FORWARD"} */
 		this.STATE = 'REALTIME'; // Initial state

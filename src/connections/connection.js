@@ -45,6 +45,7 @@ export class Connection {
 			this.ended = true;
 			clearInterval(this.interval);
 			this.remoteSocket.end();
+			config.clientConnected = false;
 		});
 	}
 
@@ -54,6 +55,7 @@ export class Connection {
 
 		this.remoteSocket.on('connect', () => {
 			LOGGER.info(`[Connect] Connected to Remote`);
+			config.clientConnected = true;
 			// this.remoteSocket.pipe(this.clientSocket);
 		});
 
@@ -73,6 +75,7 @@ export class Connection {
 			this.ended = true;
 			clearInterval(this.interval);
 			this.clientSocket.end();
+			config.clientConnected = false;
 		});
 	}
 
