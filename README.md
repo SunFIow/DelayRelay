@@ -8,19 +8,6 @@ A Node.js RTMP proxy that adds a configurable stream delay between OBS and Twitc
 -  Adds a configurable stream delay (changeable at runtime)
 -  No need to restart the stream to change delay
 -  HTTP API for dynamic configuration
--  Modular, testable codebase (`src/` directory)
-
-## Getting Started
-
-1. **Install dependencies:**
-   ```sh
-   yarn install
-   ```
-2. **Start the proxy server:**
-   ```sh
-   yarn start
-   ```
-   (This runs `src/index.js` as the entry point.)
 
 ## Usage
 
@@ -36,6 +23,10 @@ A Node.js RTMP proxy that adds a configurable stream delay between OBS and Twitc
       -  `/activate-delay` — Start buffering/delaying
       -  `/deactivate-delay` — Forward immediately (no delay)
       -  `/status` — Get current configuration
+
+### Configuring via config.json
+
+You can also set initial configuration values by editing the `config.json` file in the project directory. This file is created automatically after the first run. Changes to `config.json` take effect on the next restart of DelayRelay. For most runtime changes, use the HTTP API instead.
 
 ## App Flow
 
@@ -62,7 +53,7 @@ This flow ensures you can add, remove, or change stream delay on the fly, with m
 
 -  `src/` — All source code (entry: `src/index.js`)
 -  `logs/` — Log files
--  `standby.flv`, `standby.png` — Standby assets (in `src/`)
+-  `bin/` — Versioned builds and bundled output (binaries, JS, web UI).
 
 ## License
 

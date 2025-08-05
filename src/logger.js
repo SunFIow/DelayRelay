@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { getFilePath } from './utils';
+import { getFilePath } from './utils.js';
 
 export class Logger {
 	constructor(prefix) {

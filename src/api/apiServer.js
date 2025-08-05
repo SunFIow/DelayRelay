@@ -33,8 +33,25 @@ export class ApiServer {
 	}
 
 	endpoints(req, res) {
+		if (req.method !== 'GET') return false; // Only handle GET requests
+
+		// /set-api-port?port=8080
+		if (req.url.startsWith('/set-api-port')) {
+			const url = new URL(req.url, `http://${req.headers.host}`);
+			const portVal = parseInt(url.searchParams.get('port'), 10);
+			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
+				config.API_PORT = portVal;
+				LOGGER_API.info(`API port set to ${portVal}`);
+				res.writeHead(200, { 'Content-Type': 'text/plain' });
+				res.end(`API port set to ${portVal}\n`);
+			} else {
+				res.writeHead(400, { 'Content-Type': 'text/plain' });
+				res.end('Invalid port parameter. Usage: "/set-api-port?port=8080"\n');
+			}
+			return true;
+		}
 		// /set-local-port?port=8888
-		if (req.method === 'GET' && req.url.startsWith('/set-local-port')) {
+		else if (req.url.startsWith('/set-local-port')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
@@ -44,12 +61,12 @@ export class ApiServer {
 				res.end(`Local port set to ${portVal}\n`);
 			} else {
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
-				res.end('Invalid port parameter. Usage: "/set-local-port?port=1935"\n');
+				res.end('Invalid port parameter. Usage: "/set-local-port?port=8888"\n');
 			}
 			return true;
 		}
 		// /set-delay?ms=15000
-		if (req.method === 'GET' && req.url.startsWith('/set-delay')) {
+		else if (req.url.startsWith('/set-delay')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const ms = parseInt(url.searchParams.get('ms'), 10);
 			if (!isNaN(ms) && ms > 0) {
@@ -64,7 +81,7 @@ export class ApiServer {
 			return true;
 		}
 		// /activate-delay
-		if (req.method === 'GET' && req.url.startsWith('/activate-delay')) {
+		else if (req.url.startsWith('/activate-delay')) {
 			config.state = 'REWIND';
 			LOGGER_API.info(`Delay activated`);
 			LOGGER.info(`Delay activated`);
@@ -73,7 +90,7 @@ export class ApiServer {
 			return true;
 		}
 		// /deactivate-delay
-		if (req.method === 'GET' && req.url.startsWith('/deactivate-delay')) {
+		else if (req.url.startsWith('/deactivate-delay')) {
 			config.state = 'FORWARD';
 			LOGGER_API.info(`Delay deactivated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -81,7 +98,7 @@ export class ApiServer {
 			return true;
 		}
 		// /set-remote-url?url=live.twitch.tv
-		if (req.method === 'GET' && req.url.startsWith('/set-remote-url')) {
+		else if (req.url.startsWith('/set-remote-url')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const remoteUrl = url.searchParams.get('url');
 			if (remoteUrl) {
@@ -96,7 +113,7 @@ export class ApiServer {
 			return true;
 		}
 		// /set-rtmp-port?port=1935
-		if (req.method === 'GET' && req.url.startsWith('/set-rtmp-port')) {
+		else if (req.url.startsWith('/set-rtmp-port')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const portVal = parseInt(url.searchParams.get('port'), 10);
 			if (!isNaN(portVal) && portVal > 0 && portVal < 65536) {
@@ -111,7 +128,7 @@ export class ApiServer {
 			return true;
 		}
 		// /set-latency?ms=10
-		if (req.method === 'GET' && req.url.startsWith('/set-latency')) {
+		else if (req.url.startsWith('/set-latency')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const latency = parseInt(url.searchParams.get('ms'), 10);
 			if (!isNaN(latency) && latency > 0) {
@@ -126,7 +143,7 @@ export class ApiServer {
 			return true;
 		}
 		// /set-max-chunks?chunks=10000
-		if (req.method === 'GET' && req.url.startsWith('/set-max-chunks')) {
+		else if (req.url.startsWith('/set-max-chunks')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const chunks = parseInt(url.searchParams.get('chunks'), 10);
 			if (!isNaN(chunks) && chunks > 0) {
@@ -141,7 +158,7 @@ export class ApiServer {
 			return true;
 		}
 		// /set-max-bytes?bytes=52428800
-		if (req.method === 'GET' && req.url.startsWith('/set-max-bytes')) {
+		else if (req.url.startsWith('/set-max-bytes')) {
 			const url = new URL(req.url, `http://${req.headers.host}`);
 			const bytes = parseInt(url.searchParams.get('bytes'), 10);
 			if (!isNaN(bytes) && bytes > 0) {
@@ -155,9 +172,8 @@ export class ApiServer {
 			}
 			return true;
 		}
-
 		// /start-server
-		if (req.method === 'GET' && req.url === '/start-server') {
+		else if (req.url === '/start-server') {
 			if (config.server) {
 				if (config.serverRunning) {
 					res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -174,9 +190,8 @@ export class ApiServer {
 			}
 			return true;
 		}
-
 		// /stop-server
-		if (req.method === 'GET' && req.url === '/stop-server') {
+		else if (req.url === '/stop-server') {
 			if (config.server) {
 				if (!config.serverRunning) {
 					res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -194,9 +209,8 @@ export class ApiServer {
 			}
 			return true;
 		}
-
 		// /status
-		if (req.method === 'GET' && req.url === '/status') {
+		else if (req.url === '/status') {
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(config.toString());
 			return true;
@@ -206,7 +220,7 @@ export class ApiServer {
 	}
 
 	sendPage(res, fileName) {
-		const filePath = getFilePath(fileName, true);
+		const filePath = getFilePath('api/' + fileName, true);
 		fs.readFile(filePath, 'utf8', (err, data) => {
 			if (err) {
 				LOGGER_API.error(`Failed to read file ${filePath}: ${err.message}`);
