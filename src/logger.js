@@ -1,41 +1,45 @@
 import fs from 'fs';
+import { getFilePath } from './utils';
 
 export class Logger {
 	constructor(prefix) {
 		const d = new Date();
 		const pad = n => n.toString().padStart(2, '0');
 		const ts = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}__${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
-		this.logFile = `logs/${prefix}_${ts}.log`;
-		this.logLatest = `${prefix}_latest.log`;
+		this.logFile = getFilePath(`logs/${prefix}_${ts}.log`);
+		this.logLatest = getFilePath(`${prefix}_latest.log`);
+		// Crate logs directory if it doesn't exist
+		const logDir = getFilePath('logs');
+		if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 		// Truncate latest log files at startup
 		fs.writeFileSync(this.logLatest, '');
 		this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
 		this.logLatestStream = fs.createWriteStream(this.logLatest, { flags: 'a' });
 	}
 
-	debug(message) {
-		this.log('DEBUG', message);
+	debug(...message) {
+		this.log('DEBUG', ...message);
 	}
 
-	info(message) {
-		this.log('INFO', message);
+	info(...message) {
+		this.log('INFO', ...message);
 	}
 
-	warn(message) {
-		this.log('WARN', message);
+	warn(...message) {
+		this.log('WARN', ...message);
 	}
 
-	error(message) {
-		this.log('ERROR', message);
+	error(...message) {
+		this.log('ERROR', ...message);
 	}
 
-	fatal(message) {
-		this.log('FATAL', message);
+	fatal(...message) {
+		this.log('FATAL', ...message);
 	}
 
-	log(level, message) {
+	log(level, ...message) {
 		const timestamp = this.getTimeString();
-		const line = `[${timestamp}] [${level}] ${message}`;
+		const line = `[${timestamp}] [${level}] ${message.join(' ')}`;
 		this.logStream.write(line + '\n');
 		if (level !== 'DEBUG') {
 			this.logLatestStream.write(line + '\n');

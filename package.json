@@ -20,13 +20,34 @@
 	"scripts": {
 		"start": "node src/index.js",
 		"dummy": "node test/dummy_rtmp_server.js",
-		"test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
+		"test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+		"build": "yarn build:1 && yarn build:2 && yarn build:3 && yarn build:4",
+		"build:1": "rimraf dist",
+		"build:2": "mkdirp dist",
+		"build:3": "rollup --config rollup.config.js",
+		"build:4": "pkg package.json --targets latest",
+		"build:run": "yarn build && .\\releases\\delayrelay.exe"
+	},
+	"bin": "dist/delayrelay.js",
+	"pkg": {
+		"outputPath": "bin",
+		"assets": [
+			"dist/*.json",
+			"dist/*.html",
+			"dist/*.css"
+		]
 	},
 	"dependencies": {
 		"node-media-server": "^4.0.18"
 	},
 	"packageManager": "yarn@1.22.19",
 	"devDependencies": {
-		"jest": "^30.0.5"
+		"@rollup/plugin-node-resolve": "^16.0.1",
+		"jest": "^30.0.5",
+		"mkdirp": "^3.0.1",
+		"pkg": "^5.8.1",
+		"rimraf": "^6.0.1",
+		"rollup": "^4.46.2",
+		"rollup-plugin-copy": "^3.5.0"
 	}
 }

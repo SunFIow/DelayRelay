@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>RTMP Delay Relay - Control Panel</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<style>
+			:root {
+				--bg: #fff;
+				--fg: #222;
+				--input-bg: #fff;
+				--input-fg: #222;
+				--input-border: #222;
+				--button-bg: #e0e0e0;
+				--button-fg: #222;
+				--button-border: #bbb;
+				--button-hover-bg: #b3d1ff;
+				--button-hover-fg: #111;
+				--button-hover-border: #3399ff;
+				--result-bg: #f4f4f4;
+				--result-fg: #222;
+			}
+
+			body.dark-mode {
+				--bg: #181a1b;
+				--fg: #e0e0e0;
+				--input-bg: #23272e;
+				--input-fg: #e0e0e0;
+				--input-border: #444;
+				--button-bg: #23272e;
+				--button-fg: #e0e0e0;
+				--button-border: #444;
+				--button-hover-bg: #2d3a4a;
+				--button-hover-fg: #fff;
+				--button-hover-border: #3399ff;
+				--result-bg: #23272e;
+				--result-fg: #e0e0e0;
+			}
+
+			body {
+				font-family: sans-serif;
+				margin: 1em;
+				background: var(--bg);
+				color: var(--fg);
+			}
+			form {
+				margin-bottom: 1.5em;
+			}
+			label {
+				display: inline-block;
+				width: 180px;
+				font-weight: 600;
+			}
+			input[type='number'],
+			input[type='text'] {
+				width: 120px;
+				background: var(--input-bg);
+				color: var(--input-fg);
+				border: 1.5px solid var(--input-border);
+				border-radius: 4px;
+				padding: 0.4em 0.9em;
+			}
+			button {
+				margin-left: 10px;
+				background: var(--button-bg);
+				color: var(--button-fg);
+				border: 1px solid var(--button-border);
+				border-radius: 4px;
+				padding: 0.4em 0.9em;
+				cursor: pointer;
+				transition: background 0.2s, color 0.2s, border 0.2s;
+			}
+			button:hover,
+			button:focus-visible {
+				background: var(--button-hover-bg);
+				color: var(--button-hover-fg);
+				border: 1.5px solid var(--button-hover-border);
+				outline: none;
+			}
+			.row {
+				margin-bottom: 0.5em;
+
+				> * {
+					margin-bottom: 0.5em;
+				}
+			}
+			#result {
+				background: var(--result-bg);
+				color: var(--result-fg);
+				padding: 1em;
+				margin-top: 1em;
+				border-radius: 4px;
+			}
+		</style>
+		<script>
+			function apiCall(path) {
+				fetch(path)
+					.then(resp => {
+						const contentType = resp.headers.get('content-type') || '';
+						if (contentType.includes('application/json')) {
+							return resp.json().then(data => ({ type: 'json', data }));
+						} else {
+							return resp.text().then(data => ({ type: 'text', data }));
+						}
+					})
+					.then(result => {
+						let resultText = '';
+						if (result.type === 'json') resultText = JSON.stringify(result.data, null, 2);
+						else resultText = result.data;
+						document.getElementById('result').textContent = resultText;
+					})
+					.catch(err => {
+						document.getElementById('result').textContent = 'Error: ' + err;
+					});
+			}
+			function submitForm(event, path, param) {
+				event.preventDefault();
+				const val = event.target.elements[param].value;
+				const url = path + '?' + param + '=' + encodeURIComponent(val);
+				apiCall(url);
+			}
+			function toggleDarkMode() {
+				document.body.classList.toggle('dark-mode');
+				localStorage.setItem('relay-ui-dark', document.body.classList.contains('dark-mode'));
+			}
+
+			function toggleDelay() {
+				const btn = document.getElementById('toggle-delay-btn');
+				const isDelayActive = btn.dataset.delayActive === 'true';
+				const endpoint = isDelayActive ? '/deactivate-delay' : '/activate-delay';
+				fetch(endpoint).finally(() => updateToggleDelayButton());
+			}
+
+			function updateToggleDelayButton() {
+				fetch('/status')
+					.then(resp => resp.json())
+					.then(data => {
+						const btn = document.getElementById('toggle-delay-btn');
+						if (data && data.state !== undefined) {
+							if (data.state !== 'DELAY') {
+								btn.textContent = 'Deactivate Delay';
+								btn.dataset.delayActive = 'true';
+							} else {
+								btn.textContent = 'Activate Delay';
+								btn.dataset.delayActive = 'false';
+							}
+						}
+					})
+					.catch(() => {
+						const btn = document.getElementById('toggle-delay-btn');
+						btn.textContent = 'Activate Delay';
+						btn.dataset.delayActive = 'false';
+					});
+			}
+
+			function toggleServer() {
+				const btn = document.getElementById('toggle-server-btn');
+				const isRunning = btn.dataset.running === 'true';
+				const endpoint = isRunning ? '/stop-server' : '/start-server';
+				fetch(endpoint).finally(() => updateToggleServerButton());
+			}
+
+			function updateToggleServerButton() {
+				fetch('/status')
+					.then(resp => resp.json())
+					.then(data => {
+						const btn = document.getElementById('toggle-server-btn');
+						if (data && data.serverRunning !== undefined) {
+							if (data.serverRunning) {
+								btn.textContent = 'Stop Server';
+								btn.dataset.running = 'true';
+							} else {
+								btn.textContent = 'Start Server';
+								btn.dataset.running = 'false';
+							}
+						}
+					})
+					.catch(() => {
+						const btn = document.getElementById('toggle-server-btn');
+						btn.textContent = 'Start Server';
+						btn.dataset.running = 'false';
+					});
+			}
+
+			window.addEventListener('DOMContentLoaded', () => {
+				let darkMode = localStorage.getItem('relay-ui-dark');
+				// Check if dark mode got saved to localStorage
+				// if not load the system preference
+				const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+				if (darkMode === null) {
+					darkMode = prefersDarkScheme.matches ? 'true' : 'false';
+				}
+				if (darkMode === 'true') {
+					document.body.classList.add('dark-mode');
+				}
+				updateToggleDelayButton();
+				updateToggleServerButton();
+			});
+		</script>
+	</head>
+	<body>
+		<div class="row">
+			<button id="ui" onclick="window.location.href='/ui'">UI</button>
+			<button id="toggle-delay-btn" onclick="toggleDelay()">Activate Delay</button>
+			<button onclick="apiCall('/status')">Status</button>
+			<button onclick="toggleDarkMode()">DarkMode</button>
+			<button id="toggle-server-btn" onclick="toggleServer()">Start Server</button>
+		</div>
+		<form onsubmit="submitForm(event, '/set-local-port', 'port')">
+			<div class="row"><label>Local Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 8888" /><button type="submit">Set</button></div>
+		</form>
+		<form onsubmit="submitForm(event, '/set-delay', 'ms')">
+			<div class="row"><label>Stream Delay (ms):</label><input name="ms" type="number" min="1" required placeholder="e.g. 10000" /><button type="submit">Set</button></div>
+		</form>
+		<form onsubmit="submitForm(event, '/set-remote-url', 'url')">
+			<div class="row"><label>Remote RTMP URL:</label><input name="url" type="text" required placeholder="e.g. live.twitch.tv" /><button type="submit">Set</button></div>
+		</form>
+		<form onsubmit="submitForm(event, '/set-rtmp-port', 'port')">
+			<div class="row"><label>Remote RTMP Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 1935" /><button type="submit">Set</button></div>
+		</form>
+		<form onsubmit="submitForm(event, '/set-latency', 'ms')">
+			<div class="row"><label>Latency Interval (ms):</label><input name="ms" type="number" min="1" required placeholder="e.g. 10" /><button type="submit">Set</button></div>
+		</form>
+		<form onsubmit="submitForm(event, '/set-max-chunks', 'chunks')">
+			<div class="row"><label>Max Buffer Chunks:</label><input name="chunks" type="number" min="1" required placeholder="e.g. 10000" /><button type="submit">Set</button></div>
+		</form>
+		<form onsubmit="submitForm(event, '/set-max-bytes', 'bytes')">
+			<div class="row"><label>Max Buffer Bytes:</label><input name="bytes" type="number" min="1" required placeholder="e.g. 52428800" /><button type="submit">Set</button></div>
+		</form>
+		<pre id="result"></pre>
+	</body>
+</html>

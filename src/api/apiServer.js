@@ -1,11 +1,9 @@
-import http from 'http';
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-import { LOGGER, LOGGER_API } from '../logger.js';
+import http from 'http';
 
 import { config } from '../config.js';
+import { LOGGER, LOGGER_API } from '../logger.js';
+import { getFilePath } from '../utils.js';
 
 export class ApiServer {
 	constructor() {
@@ -208,9 +206,7 @@ export class ApiServer {
 	}
 
 	sendPage(res, fileName) {
-		const __filename = fileURLToPath(import.meta.url);
-		const __dirname = path.dirname(__filename);
-		const filePath = path.join(__dirname, fileName);
+		const filePath = getFilePath(fileName, true);
 		fs.readFile(filePath, 'utf8', (err, data) => {
 			if (err) {
 				LOGGER_API.error(`Failed to read file ${filePath}: ${err.message}`);

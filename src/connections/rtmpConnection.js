@@ -35,14 +35,14 @@ export class RtmpConnection extends Connection {
 		super.initializeClient();
 
 		this.incoming = new Rtmp();
-		this.incoming.onConnectCallback = req => {
-			LOGGER.info(`[RTMP] Client connected: [App/${req.app}] [Name/${req.name}] [Host/${req.host}] [Query/${JSON.stringify(req.query)}]`);
-		};
-		this.incoming.onPlayCallback = () => {
-			LOGGER.info(`[RTMP] Client started playing stream`);
+		this.incoming.onConnectCallback = () => {
+			LOGGER.info(`[RTMP] Client connected`);
 		};
 		this.incoming.onPushCallback = () => {
-			LOGGER.info(`[RTMP] Client started pushing stream`);
+			LOGGER.info(`[RTMP] Client pushing stream`);
+		};
+		this.incoming.onPlayCallback = () => {
+			LOGGER.info(`[RTMP] Client playing stream`);
 		};
 	}
 }

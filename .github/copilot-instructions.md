@@ -47,6 +47,7 @@ This project is a Node.js RTMP proxy that adds a configurable stream delay betwe
 -  `src/relayServer.js`, `src/connections/connection.js`, `src/connections/rtmpConnection.js`, `src/streamBuffer.js`, `src/apiServer.js`, `src/config.js`, `src/logger.js`
 -  `copyof-node-media-server/` (do not modify)
 -  `test/` (dummy servers for testing)
+-  `bin/` — Contains versioned subfolders (e.g., `0.0.1/`, `1.0.0/`) for finished builds. Each version may include compiled binaries (like `delayrelay.exe`) and a `dist/` directory with bundled JavaScript (`delayrelay.js`) and web UI files (`relay-controls.html`, `relay-ui.html`).
 
 ---
 

@@ -1,36 +1,48 @@
 import fs from 'fs';
-import { LOGGER } from './logger';
-const CONFIG_PATH = './config.json';
+
+import { LOGGER } from './logger.js';
+import { getFilePath } from './utils.js';
+
+const TESTING = false; // Set to true for local testing
+
+const CONFIG_PATH = getFilePath('config.json');
+const TEST_PATH = getFilePath('config.test.json');
 
 export class Config {
 	constructor() {
-		this.TESTING = false; // Set to true for local testing
-		this.API_PORT = 8080; // Local port for the API server
 		this.server = null; // Will hold the server instance
 		this.serverRunning = false; // Track if the relay server is running
 		this.clientConnected = false; // Track If the client is connected to the remote server
 		this.state = 'REALTIME'; // Initial state
-
-		this._LOCAL_PORT = 8888; // Local port for the proxy server
-		this._STREAM_DELAY_MS = 30_000; // 30 seconds delay
-		/**@type {"REALTIME" | "REWIND" | "DELAY" | "FORWARD"} */
-		this._REMOTE_RTMP_URL = this._TESTING ? 'localhost' : 'live.twitch.tv';
-		this._REMOTE_RTMP_PORT = this._TESTING ? 9999 : 1935;
-		this._LATENCY_INTERVAL = 5; // Check every 10ms for low latency
-		this._MAX_BUFFER_BYTES = 1 * 1024 * 1024 * 1024; // 1 GB max buffer size
-		this._MAX_BUFFER_CHUNKS = this._MAX_BUFFER_BYTES / 6000; // Max number of chunks in buffer
+		this.configPath = TESTING ? TEST_PATH : CONFIG_PATH;
 
 		this.loadFromDisk();
+
+		this._API_PORT ??= 8080; // Local port for the API server
+		this._LOCAL_PORT ??= 8888; // Local port for the proxy server
+		this._STREAM_DELAY_MS ??= 30_000; // 30 seconds delay
+		/**@type {"REALTIME" | "REWIND" | "DELAY" | "FORWARD"} */
+		this._REMOTE_RTMP_URL ??= TESTING ? 'localhost' : 'live.twitch.tv';
+		this._REMOTE_RTMP_PORT ??= TESTING ? 9999 : 1935;
+		this._LATENCY_INTERVAL ??= 5; // Check every 10ms for low latency
+		this._MAX_BUFFER_BYTES ??= 1 * 1024 * 1024 * 1024; // 1 GB max buffer size
+		this._MAX_BUFFER_CHUNKS ??= this._MAX_BUFFER_BYTES / 6000; // Max number of chunks in buffer
+
 		this.saveToDisk();
 	}
 
 	loadFromDisk() {
 		try {
-			if (fs.existsSync(CONFIG_PATH)) {
-				const data = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+			if (fs.existsSync(this.configPath)) {
+				const raw = fs.readFileSync(this.configPath, 'utf8');
+				const data = JSON.parse(raw);
+				const prop = Object.getPrototypeOf(this);
 				for (const k in data) {
-					if (Object.hasOwn(this, `_${k}`)) this[`_${k}`] = data[k];
+					const desc = Object.getOwnPropertyDescriptor(prop, k);
+					if (desc) this[`_${k}`] = data[k];
 				}
+			} else {
+				LOGGER.warn(`Config file ${this.configPath} does not exist, using default values.`);
 			}
 		} catch (e) {
 			LOGGER.error('Failed to load config from disk:', e);
@@ -50,7 +62,7 @@ export class Config {
 				MAX_BUFFER_CHUNKS: this.MAX_BUFFER_CHUNKS
 			};
 
-			fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 3), 'utf8');
+			fs.writeFileSync(this.configPath, JSON.stringify(data, null, 3), 'utf8');
 		} catch (e) {
 			LOGGER.error('Failed to save config to disk:', e);
 		}
@@ -58,7 +70,7 @@ export class Config {
 
 	toString() {
 		return JSON.stringify({
-			TESTING: this.TESTING,
+			TESTING: TESTING,
 			API_PORT: this.API_PORT,
 			LOCAL_PORT: this.LOCAL_PORT,
 			serverRunning: this.serverRunning,
@@ -71,6 +83,14 @@ export class Config {
 			MAX_BUFFER_BYTES: this.MAX_BUFFER_BYTES,
 			MAX_BUFFER_CHUNKS: this.MAX_BUFFER_CHUNKS
 		});
+	}
+
+	get API_PORT() {
+		return this._API_PORT;
+	}
+	set API_PORT(v) {
+		this._API_PORT = v;
+		this.saveToDisk();
 	}
 
 	get LOCAL_PORT() {

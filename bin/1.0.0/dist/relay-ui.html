@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>DelayRelay OBS Dock</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<style>
+			:root {
+				--bg: #181a1b;
+				--fg: #e0e0e0;
+				--accent: #3399ff;
+				--danger: #e74c3c;
+				--success: #27ae60;
+				--input-bg: #23272e;
+				--input-fg: #e0e0e0;
+				--input-border: #444;
+				--button-bg: #23272e;
+				--button-fg: #e0e0e0;
+				--button-border: #444;
+				--button-hover-bg: #2d3a4a;
+				--button-hover-fg: #fff;
+				--button-hover-border: #3399ff;
+			}
+			html,
+			body {
+				background: var(--bg);
+				color: var(--fg);
+				font-family: system-ui, sans-serif;
+				margin: 0;
+				padding: 0;
+				font-size: 15px;
+				overflow-x: hidden;
+			}
+			.container {
+				padding: 1em 1.2em 0.5em 1.2em;
+				display: flex;
+				flex-direction: column;
+				gap: 1em;
+				position: relative;
+			}
+			.status-row {
+				display: flex;
+				align-items: center;
+				gap: 0.7em;
+				flex-wrap: wrap;
+			}
+			.icon {
+				width: 1.3em;
+				height: 1.3em;
+				vertical-align: middle;
+				display: inline-block;
+			}
+			.status-dot {
+				width: 0.9em;
+				height: 0.9em;
+				border-radius: 50%;
+				display: inline-block;
+				background: var(--danger);
+			}
+			.status-dot.active {
+				background: var(--success);
+			}
+			.label {
+				font-size: 1em;
+				opacity: 0.9;
+				pointer-events: none;
+			}
+			.w40 {
+				width: 40px;
+			}
+			input[type='number'] {
+				width: auto;
+				height: 32px;
+				box-sizing: border-box;
+				min-width: 2.5em;
+				max-width: 5em;
+				background: var(--input-bg);
+				color: var(--input-fg);
+				border: 1.5px solid var(--input-border);
+				border-radius: 4px;
+				padding: 0.4em 0.4em;
+				font-size: 1em;
+				-moz-appearance: textfield;
+				appearance: textfield;
+				text-align: center;
+				transition: width 0.15s;
+			}
+			input[type='number']::-webkit-inner-spin-button,
+			input[type='number']::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+			input[type='number'].autosize {
+				min-width: 2em;
+				max-width: 8em;
+				transition: width 0.15s;
+			}
+
+			button {
+				background: var(--button-bg);
+				color: var(--button-fg);
+				border: 1px solid var(--button-border);
+				border-radius: 4px;
+				padding: 0.3em 0.8em;
+				cursor: pointer;
+				font-size: 1em;
+				transition: background 0.2s, color 0.2s, border 0.2s;
+				display: flex;
+				align-items: center;
+				gap: 0.3em;
+			}
+			button:hover,
+			button:focus-visible {
+				background: var(--button-hover-bg);
+				color: var(--button-hover-fg);
+				border: 1.5px solid var(--button-hover-border);
+				outline: none;
+			}
+			.error {
+				position: absolute;
+				left: 16px;
+				right: 16px;
+				margin: 0 auto;
+				top: 1em;
+				background: #e74c3c;
+				color: #fff;
+				padding: 0.5em 1.5em 0.5em 1em;
+				border-radius: 6px;
+				font-size: 0.98em;
+				min-width: 80px;
+				max-width: 200px;
+				box-sizing: border-box;
+				text-align: center;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.2s;
+				z-index: 100;
+				display: none;
+			}
+			.error.visible {
+				display: block;
+				opacity: 1;
+				pointer-events: auto;
+			}
+			#error-msg {
+				user-select: all;
+				cursor: help;
+			}
+			.error .close-x {
+				position: absolute;
+				top: 0.1em;
+				right: 0.5em;
+				font-size: 1.1em;
+				color: #fff;
+				cursor: pointer;
+				transition: opacity 0.15s;
+				background: none;
+				border: none;
+				padding: 0;
+				z-index: 101;
+			}
+			.error .close-x:hover {
+				color: #000000;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="error" id="error">
+			<button class="close-x" id="error-x" title="Close">&#x2716;</button>
+			<div id="error-msg"></div>
+		</div>
+		<div class="container">
+			<div class="status-row">
+				<span class="label">Connection</span>
+				<span id="conn-dot" class="status-dot"></span>
+			</div>
+			<div class="status-row">
+				<span class="label w40">Server</span>
+				<span id="server-dot" class="status-dot"></span>
+				<button id="toggle-server" title="Start/Stop Server">
+					<span id="server-icon" class="icon">&#x23F5;</span>
+				</button>
+			</div>
+			<div class="status-row">
+				<!-- with a white space after it -->
+				<span class="label w40">Delay</span>
+				<span id="delay-dot" class="status-dot"></span>
+				<button id="toggle-delay" title="Activate/Deactivate Delay">
+					<span id="delay-icon" class="icon">&#x23F8;</span>
+				</button>
+			</div>
+			<div class="status-row">
+				<span class="label">Delay (s)</span>
+				<input id="delay-ms" type="number" min="1" step="1" placeholder="..." />
+				<button id="set-delay" title="Set Delay">
+					<span class="icon">&#x2714;</span>
+				</button>
+			</div>
+		</div>
+		<script>
+			function fetchStatus() {
+				return fetch('/status').then(r => r.json());
+			}
+			function setStatusUI(data) {
+				// Server
+				const serverDot = document.getElementById('server-dot');
+				const serverStatus = document.getElementById('server-status');
+				const serverIcon = document.getElementById('server-icon');
+				if (data.serverRunning) {
+					serverDot.classList.add('active');
+					serverIcon.textContent = '\u23F9'; // Stop icon
+				} else {
+					serverDot.classList.remove('active');
+					serverIcon.textContent = '\u25B6'; // Play icon
+				}
+				// Delay
+				const delayDot = document.getElementById('delay-dot');
+				const delayIcon = document.getElementById('delay-icon');
+				if (data.state === 'DELAY') {
+					delayDot.classList.add('active');
+					delayIcon.textContent = '\u23F8'; // Pause icon
+				} else {
+					delayDot.classList.remove('active');
+					delayIcon.textContent = '\u25B6'; // Play icon
+				}
+				// Delay ms
+				const delayInput = document.getElementById('delay-ms');
+				// Only update value if not focused (not being edited)
+				if (document.activeElement !== delayInput) {
+					delayInput.value = Math.round((data.STREAM_DELAY_MS || 0) / 1000);
+					delayInput.dispatchEvent(new Event('change'));
+				}
+				delayInput.disabled = data.state !== 'REALTIME';
+				document.getElementById('set-delay').disabled = delayInput.disabled;
+				// Connection
+				const connDot = document.getElementById('conn-dot');
+				if (data.clientConnected) connDot.classList.add('active');
+				else connDot.classList.remove('active');
+			}
+			function showError(msg) {
+				const errorDiv = document.getElementById('error');
+				const errorMsg = document.getElementById('error-msg');
+				errorMsg.textContent = msg;
+				if (msg) {
+					errorDiv.classList.add('visible');
+				} else {
+					errorDiv.classList.remove('visible');
+					errorMsg.textContent = '';
+				}
+			}
+			// Dismiss error on X
+			const errorX = document.getElementById('error-x');
+			if (errorX) errorX.onclick = () => showError('');
+
+			function updateAll() {
+				fetchStatus().then(data => setStatusUI(data));
+			}
+			document.getElementById('toggle-server').onclick = function () {
+				fetchStatus().then(data => {
+					const endpoint = data.serverRunning ? '/stop-server' : '/start-server';
+					fetch(endpoint).then(() => updateAll());
+				});
+			};
+			document.getElementById('toggle-delay').onclick = function () {
+				fetchStatus().then(data => {
+					const endpoint = data.state === 'DELAY' ? '/deactivate-delay' : '/activate-delay';
+					fetch(endpoint).then(() => updateAll());
+				});
+			};
+			document.getElementById('set-delay').onclick = function () {
+				const val = document.getElementById('delay-ms').value;
+				if (!val || isNaN(val) || val < 1) {
+					showError('Invalid delay value.');
+					return;
+				}
+				fetch(`/set-delay?ms=${parseInt(val, 10) * 1000}`)
+					.then(() => updateAll())
+					.catch(() => showError('Failed to set delay.'));
+			};
+			// Initial load and periodic refresh
+			updateAll();
+			setInterval(updateAll, 3000);
+
+			function autosizeInput(input) {
+				input.classList.add('autosize');
+				input.style.width = 1.5 + (input.value.length || input.placeholder.length) * 0.55 + 'em';
+			}
+
+			// Autosize delay-ms input
+			const delayInput = document.getElementById('delay-ms');
+			// Initial autosize
+			autosizeInput(delayInput);
+
+			delayInput.addEventListener('input', function (evt) {
+				autosizeInput(delayInput);
+			});
+			delayInput.addEventListener('change', function (evt) {
+				autosizeInput(delayInput);
+			});
+		</script>
+	</body>
+</html>
