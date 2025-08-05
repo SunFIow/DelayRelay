@@ -3,7 +3,7 @@ import http from 'http';
 
 import { config } from '../config.js';
 import { LOGGER, LOGGER_API } from '../logger.js';
-import { getFilePath } from '../utils.js';
+import { getFilePath, isVM } from '../utils.js';
 
 export class ApiServer {
 	constructor() {
@@ -220,7 +220,8 @@ export class ApiServer {
 	}
 
 	sendPage(res, fileName) {
-		const filePath = getFilePath('api/' + fileName, true);
+		if (!isVM) fileName = 'api/' + fileName;
+		const filePath = getFilePath(fileName, true);
 		fs.readFile(filePath, 'utf8', (err, data) => {
 			if (err) {
 				LOGGER_API.error(`Failed to read file ${filePath}: ${err.message}`);

@@ -5,6 +5,8 @@ const FILENAME = url.fileURLToPath(import.meta.url);
 const DIRNAME = path.dirname(FILENAME);
 const workingDirectory = process.cwd();
 
+export const isVM = DIRNAME.includes('snapshot');
+
 export function getFilePath(filename, vm = false) {
 	if (vm) {
 		return path.join(DIRNAME, filename);

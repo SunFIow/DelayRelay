@@ -13,6 +13,8 @@ const FILENAME = url.fileURLToPath((typeof document === 'undefined' ? require('u
 const DIRNAME = path.dirname(FILENAME);
 const workingDirectory = process.cwd();
 
+const isVM = DIRNAME.includes('snapshot');
+
 function getFilePath(filename, vm = false) {
 	if (vm) {
 		return path.join(DIRNAME, filename);
@@ -440,7 +442,8 @@ class ApiServer {
 	}
 
 	sendPage(res, fileName) {
-		const filePath = getFilePath('api/' + fileName, true);
+		if (!isVM) fileName = 'api/' + fileName;
+		const filePath = getFilePath(fileName, true);
 		fs.readFile(filePath, 'utf8', (err, data) => {
 			if (err) {
 				LOGGER_API.error(`Failed to read file ${filePath}: ${err.message}`);
