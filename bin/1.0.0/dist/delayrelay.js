@@ -236,8 +236,6 @@ class ApiServer {
 	run() {
 		this.server.listen(this.port, () => {
 			LOGGER_API.info(`HTTP API listening on http://localhost:${this.port}`);
-			LOGGER.info(`HTTP API listening on http://localhost:${this.port}`);
-			console.log(`HTTP API listening on http://localhost:${this.port}`);
 		});
 	}
 
