@@ -206,6 +206,9 @@
 			<button onclick="toggleDarkMode()">DarkMode</button>
 			<button id="toggle-server-btn" onclick="toggleServer()">Start Server</button>
 		</div>
+		<form onsubmit="submitForm(event, '/set-api-port', 'port')">
+			<div class="row"><label>API Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 8080" /><button type="submit">Set</button></div>
+		</form>
 		<form onsubmit="submitForm(event, '/set-local-port', 'port')">
 			<div class="row"><label>Local Port:</label><input name="port" type="number" min="1" max="65535" required placeholder="e.g. 8888" /><button type="submit">Set</button></div>
 		</form>
