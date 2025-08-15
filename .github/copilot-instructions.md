@@ -58,6 +58,10 @@ This project is a Node.js RTMP proxy that adds a configurable stream delay betwe
 -  Follow the separation of concerns as described above.
 -  Reference the HTTP API (`ApiServer.endpoints`) for available API endpoints.
 
+## Assistant preferences
+
+-  Assistant style: short, simple English; avoid uncommon words; expand only for complex topics.
+
 **User confirmations:**
 
 -  There is no button interface for confirmations in this chat. Whenever you ask the user for confirmation or a choice (e.g., "Would you like me to..."), always suggest a quick reply template for the user to copy and send, such as:

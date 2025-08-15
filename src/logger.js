@@ -17,6 +17,10 @@ export class Logger {
 		this.logLatestStream = fs.createWriteStream(this.logLatest, { flags: 'a' });
 	}
 
+	trace(...message) {
+		this.log('TRACE', ...message);
+	}
+
 	debug(...message) {
 		this.log('DEBUG', ...message);
 	}
@@ -41,7 +45,7 @@ export class Logger {
 		const timestamp = this.getTimeString();
 		const line = `[${timestamp}] [${level}] ${message.join(' ')}`;
 		this.logStream.write(line + '\n');
-		if (level !== 'DEBUG') {
+		if (level !== 'TRACE' && level !== 'DEBUG') {
 			this.logLatestStream.write(line + '\n');
 			console.log(line);
 		}

@@ -1,5 +1,5 @@
 import { StreamBuffer } from '../src/streamBuffer.js';
-import { config } from '../src/config.js';
+import config from '../src/config.js';
 
 describe('StreamBuffer', () => {
 	beforeEach(() => {

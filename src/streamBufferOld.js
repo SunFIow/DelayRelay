@@ -2,7 +2,7 @@ import { LOGGER } from './logger.js';
 
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
-import { config } from './config.js';
+import config from './config.js';
 
 export class StreamBuffer {
 	constructor() {

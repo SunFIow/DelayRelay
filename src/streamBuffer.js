@@ -12,8 +12,55 @@ import { LOGGER } from './logger.js';
 
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
-import { config } from './config.js';
+import config from './config.js';
 import { CodecType, PacketFlags } from './parsing.js';
+
+// Simple RingBuffer (circular buffer) implementation optimized for push/shift
+class RingBuffer {
+	constructor(capacity = 1024) {
+		this._cap = Math.max(4, capacity);
+		this._buf = new Array(this._cap);
+		this._head = 0; // index of first element
+		this._len = 0;
+	}
+	push(item) {
+		if (this._len === this._cap) this._grow();
+		const idx = (this._head + this._len) % this._cap;
+		this._buf[idx] = item;
+		this._len++;
+	}
+	shift() {
+		if (this._len === 0) return undefined;
+		const item = this._buf[this._head];
+		this._buf[this._head] = undefined; // allow GC
+		this._head = (this._head + 1) % this._cap;
+		this._len--;
+		return item;
+	}
+	get(index) {
+		if (index < 0 || index >= this._len) return undefined;
+		return this._buf[(this._head + index) % this._cap];
+	}
+	peek() {
+		return this.get(0);
+	}
+	toArray() {
+		const out = new Array(this._len);
+		for (let i = 0; i < this._len; i++) out[i] = this.get(i);
+		return out;
+	}
+	_grow() {
+		const newCap = this._cap * 2;
+		const newBuf = new Array(newCap);
+		for (let i = 0; i < this._len; i++) newBuf[i] = this.get(i);
+		this._buf = newBuf;
+		this._cap = newCap;
+		this._head = 0;
+	}
+	get length() {
+		return this._len;
+	}
+}
 
 /**
  * @typedef {Object} ChunkData
@@ -41,7 +88,7 @@ export class StreamBuffer {
 		this.buffer = [];
 		this.totalLength = 0;
 		/** @type {ChunkData[]} */
-		this.delayBuffer = [];
+		this.delayBuffer = new RingBuffer(2048);
 		this.isDelayBufferActive = false;
 
 		this.paused = false;
@@ -54,33 +101,6 @@ export class StreamBuffer {
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
 		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-	}
-
-	handleMemoryManagement(socket) {
-		// Memory management: pause or drop
-		if (this.buffer.length > config.MAX_BUFFER_CHUNKS || this.totalLength > config.MAX_BUFFER_BYTES) {
-			if (typeof socket.pause === 'function' && !this.paused) {
-				socket.pause();
-				this.paused = true;
-				if (config.state !== 'REWIND') {
-					LOGGER.warn(`[Memory] Buffer limit reached. Pausing OBS input. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
-				} else {
-					LOGGER.warn(`[Memory] Buffer limit reached while buffering. Pausing OBS input. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
-				}
-			} else {
-				// Drop oldest chunk
-				const dropped = this.buffer.shift();
-				if (dropped) this.totalLength -= dropped.chunk.length;
-				LOGGER.warn(`[Memory] Buffer overflow! Dropped oldest chunk. Buffer: ${this.buffer.length} chunks, ${this.totalLength} bytes`);
-			}
-		} else if (this.paused && this.buffer.length < config.MAX_BUFFER_CHUNKS * 0.8 && this.totalLength < config.MAX_BUFFER_BYTES * 0.8) {
-			// Resume if buffer is below 80% of limit
-			if (typeof socket.resume === 'function') {
-				socket.resume();
-				this.paused = false;
-				LOGGER.info(`[Memory] Buffer below threshold. Resumed OBS input.`);
-			}
-		}
 	}
 
 	/**
@@ -114,6 +134,8 @@ export class StreamBuffer {
 			LOGGER.info(`[Buffer] Added ${this.chunkAddCount} chunks so far`);
 			LOGGER.info(`[Buffer] timedBuffer: ${this.buffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
 		}
+
+		// handleMemoryManagement();
 	}
 
 	/**
@@ -158,18 +180,18 @@ export class StreamBuffer {
 	 */
 	updateDelayBuffer(now) {
 		if (config.state === 'REWIND') return;
-		while (this.delayBuffer.length > 0 && now - this.delayBuffer[0].time > config.STREAM_DELAY_MS) {
+		while (this.delayBuffer.length > 0 && now - this.delayBuffer.peek().time > config.STREAM_DELAY_MS) {
 			// Remove chunks until we find a key frame or the buffer is empty
-			let skipSameKeyFrame = this.delayBuffer[0].keyFrame;
+			let skipSameKeyFrame = this.delayBuffer.peek().keyFrame;
 			while (this.delayBuffer.length > 0 && !skipSameKeyFrame) {
 				this.delayBuffer.shift();
-				skipSameKeyFrame = this.delayBuffer[0]?.keyFrame;
+				skipSameKeyFrame = this.delayBuffer.peek()?.keyFrame;
 			}
 
 			// Remove all chunks associated with the found key frame or the buffer is empty
 			let foundNewKeyFrame = false;
 			while (this.delayBuffer.length > 0 && !foundNewKeyFrame) {
-				const buf = this.delayBuffer[0];
+				const buf = this.delayBuffer.peek();
 				const isKeyFrame = buf.keyFrame;
 				// Dont check for key frame if we are skipping same key frame headers
 				if (!isKeyFrame && skipSameKeyFrame) skipSameKeyFrame = false;
@@ -184,7 +206,7 @@ export class StreamBuffer {
 		// Add all chunks from delayBuffer to the start of buffer
 		// this.buffer.unshift(...this.delayBuffer);
 		for (let i = this.delayBuffer.length - 1; i >= 0; i--) {
-			const chunkData = this.delayBuffer[i];
+			const chunkData = this.delayBuffer.get(i);
 			if (this.buffer.findIndex(b => b.id === chunkData.id) === -1) {
 				this.buffer.unshift(chunkData);
 				this.totalLength += chunkData.chunk.length;

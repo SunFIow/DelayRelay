@@ -340,7 +340,8 @@ class Rtmp {
 	 * @param {AVPacket} avpacket
 	 * @returns {Buffer}
 	 */
-	static createMessage = avpacket => {
+	// added possibility for custom chunk size
+	static createMessage = (avpacket, chunkSize = RTMP_MAX_CHUNK_SIZE) => {
 		let rtmpPacket = new RtmpPacket();
 		rtmpPacket.header.fmt = MESSAGE_FORMAT_0;
 		switch (avpacket.codec_type) {
@@ -359,7 +360,7 @@ class Rtmp {
 		rtmpPacket.header.timestamp = avpacket.dts;
 		rtmpPacket.clock = avpacket.dts;
 		rtmpPacket.payload = avpacket.data;
-		return Rtmp.chunksCreate(rtmpPacket);
+		return Rtmp.chunksCreate(rtmpPacket, chunkSize);
 	};
 
 	static chunkBasicHeaderCreate = (fmt, cid) => {
@@ -402,11 +403,11 @@ class Rtmp {
 	 * @param {RtmpPacket} packet
 	 * @returns {Buffer}
 	 */
-	static chunksCreate = packet => {
+	// added possibility for custom chunk size
+	static chunksCreate = (packet, chunkSize = RTMP_MAX_CHUNK_SIZE) => {
 		let header = packet.header;
 		let payload = packet.payload;
 		let payloadSize = header.length;
-		let chunkSize = RTMP_MAX_CHUNK_SIZE;
 		let chunksOffset = 0;
 		let payloadOffset = 0;
 		let chunkBasicHeader = Rtmp.chunkBasicHeaderCreate(header.fmt, header.cid);

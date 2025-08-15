@@ -1,5 +1,5 @@
 import net from 'net';
-import { config } from '../config.js';
+import config from '../config.js';
 import { LOGGER } from '../logger.js';
 import { StreamBuffer } from '../streamBuffer.js';
 

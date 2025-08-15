@@ -1,7 +1,7 @@
 import fs from 'fs';
 import http from 'http';
 
-import { config } from '../config.js';
+import config from '../config.js';
 import { LOGGER, LOGGER_API } from '../logger.js';
 import { getFilePath, isVM } from '../utils.js';
 

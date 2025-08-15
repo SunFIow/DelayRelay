@@ -1,18 +1,18 @@
 import net from 'net';
 import { SimpleConnection } from './connections/simpleConnection.js';
 import { RtmpConnection } from './connections/rtmpConnection.js';
-import { config } from './config.js';
+import config from './config.js';
 import { LOGGER } from './logger.js';
+import { Connection } from './connections/connection.js';
 
 export class RelayServer {
-	constructor() {
+	/** @param {(clientSocket: net.Socket) => Connection} connectionHandler */
+	constructor(connectionHandler) {
 		this.server = net.createServer({ pauseOnConnect: false });
 		/** @type {Set<net.Socket>} */
 		this.clients = new Set();
 		this.server.on('connection', this.handleClient.bind(this));
-
-		config.server = this;
-		config.serverRunning = false;
+		this.connectionHandler = connectionHandler;
 	}
 
 	/** @param {net.Socket} clientSocket */
@@ -20,7 +20,7 @@ export class RelayServer {
 		this.clients.add(clientSocket);
 		clientSocket.on('close', () => this.clients.delete(clientSocket));
 
-		const client = new RtmpConnection(clientSocket);
+		const client = this.connectionHandler(clientSocket);
 		client.run();
 	}
 

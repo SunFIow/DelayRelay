@@ -3,12 +3,12 @@ import fs from 'fs';
 import { LOGGER } from './logger.js';
 import { getFilePath } from './utils.js';
 
-const TESTING = false; // Set to true for local testing
+const TESTING = true; // Set to true for local testing
 
 const CONFIG_PATH = getFilePath('config.json');
 const TEST_PATH = getFilePath('config.test.json');
 
-export class Config {
+class Config {
 	constructor() {
 		this.server = null; // Will hold the server instance
 		this.serverRunning = false; // Track if the relay server is running
@@ -150,4 +150,5 @@ export class Config {
 	}
 }
 
-export const config = new Config();
+const config = new Config();
+export default config;
