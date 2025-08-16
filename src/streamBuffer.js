@@ -1,7 +1,7 @@
 /*
 
 StreamBuffer class for managing video stream chunks with timing and delay buffers.
-There are ChunkData Arrays:
+There are Two ChunkData Arrays:
 1. `buffer`: 
 2. `delayBuffer`: A rolling window of chunks from the last N seconds. (The amount of time we want to delay the stream)
 
@@ -9,58 +9,11 @@ There are ChunkData Arrays:
 */
 
 import { LOGGER } from './logger.js';
-
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
 import config from './config.js';
 import { CodecType, PacketFlags } from './parsing.js';
-
-// Simple RingBuffer (circular buffer) implementation optimized for push/shift
-class RingBuffer {
-	constructor(capacity = 1024) {
-		this._cap = Math.max(4, capacity);
-		this._buf = new Array(this._cap);
-		this._head = 0; // index of first element
-		this._len = 0;
-	}
-	push(item) {
-		if (this._len === this._cap) this._grow();
-		const idx = (this._head + this._len) % this._cap;
-		this._buf[idx] = item;
-		this._len++;
-	}
-	shift() {
-		if (this._len === 0) return undefined;
-		const item = this._buf[this._head];
-		this._buf[this._head] = undefined; // allow GC
-		this._head = (this._head + 1) % this._cap;
-		this._len--;
-		return item;
-	}
-	get(index) {
-		if (index < 0 || index >= this._len) return undefined;
-		return this._buf[(this._head + index) % this._cap];
-	}
-	peek() {
-		return this.get(0);
-	}
-	toArray() {
-		const out = new Array(this._len);
-		for (let i = 0; i < this._len; i++) out[i] = this.get(i);
-		return out;
-	}
-	_grow() {
-		const newCap = this._cap * 2;
-		const newBuf = new Array(newCap);
-		for (let i = 0; i < this._len; i++) newBuf[i] = this.get(i);
-		this._buf = newBuf;
-		this._cap = newCap;
-		this._head = 0;
-	}
-	get length() {
-		return this._len;
-	}
-}
+import RingBuffer from './ringBuffer.js';
 
 /**
  * @typedef {Object} ChunkData
@@ -73,8 +26,8 @@ class RingBuffer {
 /**
  * @class
  * @property {number} CURRENT_ID - Unique ID for each chunk
- * @property {ChunkData[]} buffer - Chunks currently in the buffer
- * @property {ChunkData[]} delayBuffer - Rolling window of chunks from the last N ms
+ * @property {RingBuffer<ChunkData>} buffer - Chunks currently in the buffer
+ * @property {RingBuffer<ChunkData>} delayBuffer - Rolling window of chunks from the last N ms
  * @property {boolean} isDelayBufferActive - Whether the delay buffer is currently active
  * @property {number} totalLength - Total length of all chunks in bytes
  * @property {boolean} paused - Whether the buffer is paused
@@ -84,11 +37,11 @@ class RingBuffer {
 export class StreamBuffer {
 	constructor() {
 		this.CURRENT_ID = 0;
-		/** @type {ChunkData[]} */
-		this.buffer = [];
+		/** @type {RingBuffer<ChunkData>} */
+		this.buffer = new RingBuffer(128);
 		this.totalLength = 0;
-		/** @type {ChunkData[]} */
-		this.delayBuffer = new RingBuffer(2048);
+		/** @type {RingBuffer<ChunkData>} */
+		this.delayBuffer = new RingBuffer(config.STREAM_DELAY_MS / 10); // 10ms resolution
 		this.isDelayBufferActive = false;
 
 		this.paused = false;
@@ -103,8 +56,7 @@ export class StreamBuffer {
 		return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 	}
 
-	/**
-	 * Push a chunk of data to the buffer.
+	/** Push a chunk of data to the buffer.
 	 * @param {Buffer} chunk - The data chunk to push.
 	 * @param {number} codec - The codec type of the chunk.
 	 * @param {number} flags - The flags associated with the chunk.
@@ -132,14 +84,13 @@ export class StreamBuffer {
 		this.chunkAddCount++;
 		if (this.chunkAddCount % LOG_EVERY === 0) {
 			LOGGER.info(`[Buffer] Added ${this.chunkAddCount} chunks so far`);
-			LOGGER.info(`[Buffer] timedBuffer: ${this.buffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
+			LOGGER.info(`[Buffer] buffer: ${this.buffer.length} chunks, ${this.formatBytes(this.totalLength)} | delayBuffer: ${this.delayBuffer.length} chunks`);
 		}
 
 		// handleMemoryManagement();
 	}
 
-	/**
-	 * Pop and return all chunks ready to be relayed based on state and delay
+	/** Pop and return all chunks ready to be relayed based on state and delay
 	 * @returns {Array<{chunk: Buffer, time: number, id: number}>}
 	 */
 	popReadyChunks() {
@@ -155,7 +106,13 @@ export class StreamBuffer {
 		const readyChunks = [];
 		const now = Date.now();
 
-		while (this.buffer.length > 0 && (config.state === 'REALTIME' || now - this.buffer[0].time > config.STREAM_DELAY_MS)) {
+		try {
+			this.buffer.peek();
+		} catch (error) {
+			LOGGER.error(`[Buffer] Error peeking buffer: ${error}`, this.buffer);
+		}
+
+		while (this.buffer.length > 0 && (config.state === 'REALTIME' || now - this.buffer.peek().time > config.STREAM_DELAY_MS)) {
 			const buf = this.buffer.shift();
 			readyChunks.push(buf);
 			this.totalLength -= buf.chunk.length;
@@ -174,8 +131,7 @@ export class StreamBuffer {
 		return readyChunks;
 	}
 
-	/**
-	 * Removes chunks from delayBuffer that are older than STREAM_DELAY_MS.
+	/** Removes chunks from delayBuffer that are older than STREAM_DELAY_MS.
 	 * Ensures the buffer starts at a key frame for clean playback.
 	 */
 	updateDelayBuffer(now) {
@@ -220,7 +176,7 @@ export class StreamBuffer {
 		let mostRecentKeyFrameStart = -1;
 		let mostRecentKeyFrameEnd = -1;
 		for (let i = this.buffer.length - 1; i >= 0; i--) {
-			const isKeyFrame = this.buffer[i].keyFrame;
+			const isKeyFrame = this.buffer.get(i).keyFrame;
 			if (!isKeyFrame) {
 				if (mostRecentKeyFrameStart === -1) {
 					break; // Found the start of the most recent key frame
@@ -231,10 +187,10 @@ export class StreamBuffer {
 
 		// Now remove all chunks before the most recent key frame
 		if (mostRecentKeyFrameStart !== -1) {
-			this.buffer = this.buffer.slice(mostRecentKeyFrameStart);
+			for (let i = 0; i < mostRecentKeyFrameStart; i++) this.buffer.shift();
 			this.totalLength = this.buffer.reduce((sum, buf) => sum + buf.chunk.length, 0);
 		} else {
-			this.buffer = [];
+			this.buffer.clear();
 			this.totalLength = 0;
 		}
 	}

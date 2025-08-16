@@ -82,7 +82,6 @@ export class ApiServer {
 		else if (req.url.startsWith('/activate-delay')) {
 			config.state = 'REWIND';
 			LOGGER_API.info(`Delay activated`);
-			LOGGER.info(`Delay activated`);
 			res.writeHead(200, { 'Content-Type': 'text/plain' });
 			res.end(`Delay activated\n`);
 			return true;
