@@ -165,11 +165,11 @@
 					.then(resp => resp.json())
 					.then(data => {
 						const btn = document.getElementById('toggle-server-btn');
-						if (data && data.serverRunning !== undefined) {
-							if (data.serverRunning) {
+						if (data && data.serverStatus !== undefined) {
+							if (data.serverStatus === 'running') {
 								btn.textContent = 'Stop Server';
 								btn.dataset.running = 'true';
-							} else {
+							} else if (data.serverStatus === 'stopped') {
 								btn.textContent = 'Start Server';
 								btn.dataset.running = 'false';
 							}

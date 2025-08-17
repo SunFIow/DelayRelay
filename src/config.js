@@ -11,7 +11,7 @@ const TEST_PATH = getFilePath('config.test.json');
 class Config {
 	constructor() {
 		this.server = null; // Will hold the server instance
-		this.serverRunning = false; // Track if the relay server is running
+		this.serverStatus = 'stopped'; // Track if the relay server is running
 		this.clientConnected = false; // Track If the client is connected to the remote server
 		this.state = 'REALTIME'; // Initial state
 		this.configPath = TESTING ? TEST_PATH : CONFIG_PATH;
@@ -21,13 +21,12 @@ class Config {
 		this._API_PORT ??= 8080; // Local port for the API server
 		this._LOCAL_PORT ??= 8888; // Local port for the proxy server
 		this._STREAM_DELAY_MS ??= 30_000; // 30 seconds delay
-		/**@type {"REALTIME" | "REWIND" | "DELAY" | "FORWARD"} */
+		/** @type {"REALTIME" | "REWIND" | "DELAY" | "FORWARD"} */
 		this._REMOTE_RTMP_URL ??= TESTING ? 'localhost' : 'live.twitch.tv';
 		this._REMOTE_RTMP_PORT ??= TESTING ? 9999 : 1935;
 		this._LATENCY_INTERVAL ??= 5; // Check every 10ms for low latency
 		this._MAX_BUFFER_BYTES ??= 1 * 1024 * 1024 * 1024; // 1 GB max buffer size
 		this._MAX_BUFFER_CHUNKS ??= this._MAX_BUFFER_BYTES / 6000; // Max number of chunks in buffer
-
 		this.saveToDisk();
 	}
 
@@ -73,7 +72,7 @@ class Config {
 			TESTING: TESTING,
 			API_PORT: this.API_PORT,
 			LOCAL_PORT: this.LOCAL_PORT,
-			serverRunning: this.serverRunning,
+			serverStatus: this.serverStatus,
 			clientConnected: this.clientConnected,
 			state: this.state,
 			STREAM_DELAY_MS: this.STREAM_DELAY_MS,

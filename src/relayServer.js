@@ -1,14 +1,15 @@
 import net from 'net';
-import { SimpleConnection } from './connections/simpleConnection.js';
-import { RtmpConnection } from './connections/rtmpConnection.js';
 import config from './config.js';
-import { LOGGER } from './logger.js';
 import { Connection } from './connections/connection.js';
+import { LOGGER } from './logger.js';
 
+/**
+ * @typedef {(clientSocket: net.Socket) => Connection} connectionHandler
+ */
 export class RelayServer {
-	/** @param {(clientSocket: net.Socket) => Connection} connectionHandler */
+	/** @param {connectionHandler} connectionHandler */
 	constructor(connectionHandler) {
-		this.server = net.createServer({ pauseOnConnect: false });
+		this.server = net.createServer({ pauseOnConnect: true });
 		/** @type {Set<net.Socket>} */
 		this.clients = new Set();
 		this.server.on('connection', this.handleClient.bind(this));
@@ -29,8 +30,9 @@ export class RelayServer {
 			LOGGER.warn('Relay server is already running');
 			return;
 		}
+		config.serverStatus = 'pending';
 		this.server.listen(config.LOCAL_PORT, () => {
-			config.serverRunning = true;
+			config.serverStatus = 'running';
 			LOGGER.info(`DelayRelay proxy listening on port ${config.LOCAL_PORT}`);
 			LOGGER.info(`Forwarding to Remote with ${config.STREAM_DELAY_MS / 1000}s delay.`);
 		});
@@ -42,8 +44,9 @@ export class RelayServer {
 			if (callback) callback();
 			return;
 		}
+		config.serverStatus = 'pending';
 		this.server.close(() => {
-			config.serverRunning = false;
+			config.serverStatus = 'stopped';
 			LOGGER.info('Relay server closed');
 			if (callback) callback();
 		});

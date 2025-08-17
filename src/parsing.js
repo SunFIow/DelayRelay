@@ -4,18 +4,18 @@ import Flv from '../copyof-node-media-server/src/protocol/flv.js';
 import Rtmp from '../copyof-node-media-server/src/protocol/rtmp.js';
 import { LOGGER } from './logger.js';
 
-const PacketTypeSequenceStart = 0;
-const PacketTypeCodedFrames = 1;
-const PacketTypeCodedFramesX = 3;
-const PacketTypeMetadata = 4;
-const PacketTypeMPEG2TSSequenceStart = 5;
-const FLV_AVC_SEQUENCE_HEADER = 0;
-const FOURCC_AV1 = Buffer.from('av01');
-const FOURCC_VP9 = Buffer.from('vp09');
-const FOURCC_HEVC = Buffer.from('hvc1');
-const FLV_CODECID_H264 = 7;
-const FLV_FRAME_KEY = 1;
-const FLV_CODECID_AAC = 10;
+export const PacketTypeSequenceStart = 0;
+export const PacketTypeCodedFrames = 1;
+export const PacketTypeCodedFramesX = 3;
+export const PacketTypeMetadata = 4;
+export const PacketTypeMPEG2TSSequenceStart = 5;
+export const FLV_AVC_SEQUENCE_HEADER = 0;
+export const FOURCC_AV1 = Buffer.from('av01');
+export const FOURCC_VP9 = Buffer.from('vp09');
+export const FOURCC_HEVC = Buffer.from('hvc1');
+export const FLV_CODECID_H264 = 7;
+export const FLV_FRAME_KEY = 1;
+export const FLV_CODECID_AAC = 10;
 
 /** @enum {number} */
 export const CodecType = {
@@ -102,51 +102,51 @@ export function parsePacketFlag(type, payload) {
 	return -1;
 }
 
-const RTMP_HANDSHAKE_UNINIT = 0;
-const RTMP_HANDSHAKE_0 = 1;
-const RTMP_HANDSHAKE_1 = 2;
-const RTMP_HANDSHAKE_2 = 3;
-const RTMP_HANDSHAKE_SIZE = 1536; // Size of the RTMP handshake payload
+export const RTMP_HANDSHAKE_UNINIT = 0;
+export const RTMP_HANDSHAKE_0 = 1;
+export const RTMP_HANDSHAKE_1 = 2;
+export const RTMP_HANDSHAKE_2 = 3;
+export const RTMP_HANDSHAKE_SIZE = 1536; // Size of the RTMP handshake payload
 
-const MAX_CHUNK_HEADER = 18;
+export const MAX_CHUNK_HEADER = 18;
 
 // CHUNK READ
-const RTMP_PARSE_INIT = 0;
-const RTMP_PARSE_BASIC_HEADER = 1;
-const RTMP_PARSE_MESSAGE_HEADER = 2;
-const RTMP_PARSE_EXTENDED_TIMESTAMP = 3;
-const RTMP_PARSE_PAYLOAD = 4;
+export const RTMP_PARSE_INIT = 0;
+export const RTMP_PARSE_BASIC_HEADER = 1;
+export const RTMP_PARSE_MESSAGE_HEADER = 2;
+export const RTMP_PARSE_EXTENDED_TIMESTAMP = 3;
+export const RTMP_PARSE_PAYLOAD = 4;
 
-const RTMP_CHUNK_TYPE_0 = 0; // Full header
-const RTMP_CHUNK_TYPE_1 = 1; // Timestamp delta, message length,
-const RTMP_CHUNK_TYPE_2 = 2; // Timestamp delta, message length, message type
+export const RTMP_CHUNK_TYPE_0 = 0; // Full header
+export const RTMP_CHUNK_TYPE_1 = 1; // Timestamp delta, message length,
+export const RTMP_CHUNK_TYPE_2 = 2; // Timestamp delta, message length, message type
 
-const rtmpHeaderSize = [11, 7, 3, 0];
+export const rtmpHeaderSize = [11, 7, 3, 0];
 
 /* Protocol Control Messages */
-const RTMP_TYPE_SET_CHUNK_SIZE = 1;
-const RTMP_TYPE_ABORT = 2;
-const RTMP_TYPE_ACKNOWLEDGEMENT = 3; // bytes read report
-const RTMP_TYPE_WINDOW_ACKNOWLEDGEMENT_SIZE = 5; // server bandwidth
-const RTMP_TYPE_SET_PEER_BANDWIDTH = 6; // client bandwidth
+export const RTMP_TYPE_SET_CHUNK_SIZE = 1;
+export const RTMP_TYPE_ABORT = 2;
+export const RTMP_TYPE_ACKNOWLEDGEMENT = 3; // bytes read report
+export const RTMP_TYPE_WINDOW_ACKNOWLEDGEMENT_SIZE = 5; // server bandwidth
+export const RTMP_TYPE_SET_PEER_BANDWIDTH = 6; // client bandwidth
 /* User Control Messages Event (4) */
-const RTMP_TYPE_EVENT = 4;
+export const RTMP_TYPE_EVENT = 4;
 /* Data Message */
-const RTMP_TYPE_AUDIO = 8;
-const RTMP_TYPE_VIDEO = 9;
+export const RTMP_TYPE_AUDIO = 8;
+export const RTMP_TYPE_VIDEO = 9;
 /* Data Message */
-const RTMP_TYPE_FLEX_STREAM = 15; // AMF3
-const RTMP_TYPE_DATA = 18; // AMF0
+export const RTMP_TYPE_FLEX_STREAM = 15; // AMF3
+export const RTMP_TYPE_DATA = 18; // AMF0
 /* Shared Object Message */
-// const RTMP_TYPE_FLEX_OBJECT = 16; // AMF3
-// const RTMP_TYPE_SHARED_OBJECT = 19; // AMF0
+// export const RTMP_TYPE_FLEX_OBJECT = 16; // AMF3
+// export const RTMP_TYPE_SHARED_OBJECT = 19; // AMF0
 /* Command Message */
-const RTMP_TYPE_FLEX_MESSAGE = 17; // AMF3
-const RTMP_TYPE_INVOKE = 20; // AMF0
+export const RTMP_TYPE_FLEX_MESSAGE = 17; // AMF3
+export const RTMP_TYPE_INVOKE = 20; // AMF0
 /* Aggregate Message */
-const RTMP_TYPE_METADATA = 22;
+export const RTMP_TYPE_METADATA = 22;
 
-const RTMP_CHUNK_SIZE = 128; // Default RTMP chunk size
+export const RTMP_CHUNK_SIZE = 128; // Default RTMP chunk size
 // const RTMP_MAX_CHUNK_SIZE = 0xffff;
 
 class RtmpPacket {
@@ -217,14 +217,14 @@ export function parserData(chunks) {
 	while (bytesRemaining > 0) {
 		switch (RTMP.handshakeState) {
 			case RTMP_HANDSHAKE_UNINIT:
-				LOGGER.trace('[RTMP] Handshake uninitialized, starting handshake');
+				// LOGGER.trace('[RTMP] Handshake uninitialized, starting handshake');
 				RTMP.handshakeState = RTMP_HANDSHAKE_0;
 				RTMP.handshakeBytes = 0;
 				bytesRemaining -= 1;
 				position += 1;
 				break;
 			case RTMP_HANDSHAKE_0:
-				LOGGER.trace('[RTMP] Handshake stage 0, waiting for more data');
+				// LOGGER.trace('[RTMP] Handshake stage 0, waiting for more data');
 				bytesToProcess = RTMP_HANDSHAKE_SIZE - RTMP.handshakeBytes;
 				if (bytesToProcess > bytesRemaining) bytesToProcess = bytesRemaining;
 				chunks.copy(RTMP.handshakePayload, RTMP.handshakeBytes, position, position + bytesToProcess);
@@ -239,7 +239,7 @@ export function parserData(chunks) {
 				}
 				break;
 			case RTMP_HANDSHAKE_1:
-				LOGGER.trace('[RTMP] Handshake stage 1, waiting for more data');
+				// LOGGER.trace('[RTMP] Handshake stage 1, waiting for more data');
 				bytesToProcess = RTMP_HANDSHAKE_SIZE - RTMP.handshakeBytes;
 				if (bytesToProcess > bytesRemaining) bytesToProcess = bytesRemaining;
 				chunks.copy(RTMP.handshakePayload, RTMP.handshakeBytes, position, bytesToProcess);
@@ -252,9 +252,9 @@ export function parserData(chunks) {
 				}
 				break;
 			case RTMP_HANDSHAKE_2:
-				LOGGER.trace('[RTMP] Handshake stage 2, waiting for more data');
+			// LOGGER.trace('[RTMP] Handshake stage 2, waiting for more data');
 			default:
-				LOGGER.trace('[RTMP] Handshake complete', RTMP.handshakeState);
+				// LOGGER.trace('[RTMP] Handshake complete', RTMP.handshakeState);
 				return chunkRead(chunks, position, bytesRemaining);
 		}
 	}
@@ -271,7 +271,7 @@ function chunkRead(data, position, bytes) {
 	while (offset < bytes) {
 		switch (RTMP.parserState) {
 			case RTMP_PARSE_INIT:
-				LOGGER.trace('[RTMP] Parsing initialized');
+				// LOGGER.trace('[RTMP] Parsing initialized');
 				RTMP.parserBytes = 1;
 				RTMP.parserBuffer[0] = data[position + offset++];
 				if (0 === (RTMP.parserBuffer[0] & 0x3f)) RTMP.parserBasicBytes = 2;
@@ -280,7 +280,7 @@ function chunkRead(data, position, bytes) {
 				RTMP.parserState = RTMP_PARSE_BASIC_HEADER;
 				break;
 			case RTMP_PARSE_BASIC_HEADER:
-				LOGGER.trace('[RTMP] Parsing basic header');
+				// LOGGER.trace('[RTMP] Parsing basic header');
 				while (RTMP.parserBytes < RTMP.parserBasicBytes && offset < bytes) {
 					RTMP.parserBuffer[RTMP.parserBytes++] = data[position + offset++];
 				}
@@ -289,7 +289,7 @@ function chunkRead(data, position, bytes) {
 				}
 				break;
 			case RTMP_PARSE_MESSAGE_HEADER:
-				LOGGER.trace('[RTMP] Parsing message header');
+				// LOGGER.trace('[RTMP] Parsing message header');
 				size = rtmpHeaderSize[RTMP.parserBuffer[0] >> 6] + RTMP.parserBasicBytes;
 				while (RTMP.parserBytes < size && offset < bytes) {
 					RTMP.parserBuffer[RTMP.parserBytes++] = data[position + offset++];
@@ -300,7 +300,7 @@ function chunkRead(data, position, bytes) {
 				}
 				break;
 			case RTMP_PARSE_EXTENDED_TIMESTAMP:
-				LOGGER.trace('[RTMP] Parsing extended timestamp');
+				// LOGGER.trace('[RTMP] Parsing extended timestamp');
 				size = rtmpHeaderSize[RTMP.parserPacket.header.fmt] + RTMP.parserBasicBytes;
 				if (RTMP.parserPacket.header.timestamp === 0xffffff) {
 					size += 4;
@@ -327,7 +327,7 @@ function chunkRead(data, position, bytes) {
 				}
 				break;
 			case RTMP_PARSE_PAYLOAD:
-				LOGGER.trace('[RTMP] Parsing payload');
+				// LOGGER.trace('[RTMP] Parsing payload');
 				size = Math.min(RTMP.inChunkSize - (RTMP.parserPacket.bytes % RTMP.inChunkSize), RTMP.parserPacket.header.length - RTMP.parserPacket.bytes);
 				size = Math.min(size, bytes - offset);
 				if (size > 0) {
@@ -336,7 +336,7 @@ function chunkRead(data, position, bytes) {
 				RTMP.parserPacket.bytes += size;
 				offset += size;
 
-				LOGGER.trace(`[RTMP] Parsed ${size} bytes, total: ${RTMP.parserPacket.bytes}/${RTMP.parserPacket.header.length}`);
+				// LOGGER.trace(`[RTMP] Parsed ${size} bytes, total: ${RTMP.parserPacket.bytes}/${RTMP.parserPacket.header.length}`);
 				if (RTMP.parserPacket.bytes >= RTMP.parserPacket.header.length) {
 					RTMP.parserState = RTMP_PARSE_INIT;
 					RTMP.parserPacket.bytes = 0;

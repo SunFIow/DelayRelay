@@ -5,7 +5,6 @@ import { Connection } from './connection.js';
 export class RtmpConnection extends Connection {
 	/** @param {Buffer} chunks */
 	onData(chunks) {
-		LOGGER.debug(`[RTMP] Received data: ${chunks.length} bytes`);
 		const error = parserData(chunks); // Parse Client RTMP data
 		if (error) {
 			LOGGER.fatal(`[RTMP] Error parsing client data: ${error}`);
@@ -16,9 +15,9 @@ export class RtmpConnection extends Connection {
 		/** @type {CodecType} */
 		const codec_type = RTMP.parserPacket.header.type;
 		const payload = RTMP.parserPacket.payload;
-		LOGGER.debug(`[RTMP] Codec Type: ${codec_type}`);
+		// LOGGER.debug(`[RTMP] Codec Type: ${codec_type}`);
 		const flags = parsePacketFlag(codec_type, payload);
-		LOGGER.debug(`[RTMP] Flags/Me: ${flags}`);
+		// LOGGER.debug(`[RTMP] Flags/Me: ${flags}`);
 		if (codec_type != CodecType.AUDIO && codec_type != CodecType.VIDEO) {
 			LOGGER.debug(`[RTMP] Client Packet received: Codec: ${codec_type}, Flags: ${flags}`);
 		}

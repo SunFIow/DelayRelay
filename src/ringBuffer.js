@@ -6,11 +6,6 @@ function nextPowerOfTwo(n) {
 	return p;
 }
 
-/** sanity check: capacity must be power of two */
-function ensurePowerOfTwo() {
-	if (!(this._cap & (this._cap - 1))) throw new Error('RingBuffer: capacity must be a power of two');
-}
-
 /**
  * Simple RingBuffer<T> (circular buffer) implementation optimized for push/shift
  * @template T
@@ -25,7 +20,12 @@ export default class RingBuffer {
 		this._head = 0;
 		this._len = 0;
 
-		ensurePowerOfTwo();
+		this.ensurePowerOfTwo();
+	}
+
+	/** sanity check: capacity must be power of two */
+	ensurePowerOfTwo() {
+		if (this._cap & (this._cap - 1)) throw new Error('RingBuffer: capacity must be a power of two: ' + this._cap);
 	}
 
 	/** Return current buffer length */
@@ -147,6 +147,6 @@ export default class RingBuffer {
 		this._cap = newCap;
 		this._head = 0;
 
-		ensurePowerOfTwo();
+		this.ensurePowerOfTwo();
 	}
 }

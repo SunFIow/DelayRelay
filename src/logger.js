@@ -21,33 +21,40 @@ export class Logger {
 		this.log('TRACE', ...message);
 	}
 
-	debug(...message) {
-		this.log('DEBUG', ...message);
+	debug(...messages) {
+		this.log('DEBUG', ...messages);
 	}
 
-	info(...message) {
-		this.log('INFO', ...message);
+	info(...messages) {
+		this.log('INFO', ...messages);
 	}
 
-	warn(...message) {
-		this.log('WARN', ...message);
+	warn(...messages) {
+		this.log('WARN', ...messages);
 	}
 
-	error(...message) {
-		this.log('ERROR', ...message);
+	error(...messages) {
+		this.log('ERROR', ...messages);
 	}
 
-	fatal(...message) {
-		this.log('FATAL', ...message);
+	fatal(...messages) {
+		this.log('FATAL', ...messages);
 	}
 
-	log(level, ...message) {
+	log(level, ...messages) {
 		const timestamp = this.getTimeString();
-		const line = `[${timestamp}] [${level}] ${message.join(' ')}`;
-		this.logStream.write(line + '\n');
+		const prefix = `[${timestamp}] [${level}]`;
+		let message = '';
+		for (let i = 0; i < messages.length; i++) {
+			if (typeof messages[i] === 'string') message += messages[i];
+			else message += JSON.stringify(messages[i], null, 3);
+
+			if (i < messages.length - 1) message += ' '; // Add space between messages
+		}
+		this.logStream.write(`${prefix} ${message}\n`);
 		if (level !== 'TRACE' && level !== 'DEBUG') {
-			this.logLatestStream.write(line + '\n');
-			console.log(line);
+			this.logLatestStream.write(`${prefix} ${message}\n`);
+			console.log(prefix, ...messages);
 		}
 	}
 

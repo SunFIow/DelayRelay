@@ -15,7 +15,7 @@ const config = {
 		allow_origin: '*'
 	}
 };
-// const nms = new NodeMediaServer(config);
-const nms = new NodeMediaServer({ ...config });
 logger.level = 'trace';
+const nms = new NodeMediaServer(config);
 nms.run();
+logger.level = 'trace';

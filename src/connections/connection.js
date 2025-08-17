@@ -21,9 +21,17 @@ export class Connection {
 	}
 
 	run() {
-		this.remoteSocket.connect(config.REMOTE_RTMP_PORT, config.REMOTE_RTMP_URL);
+		this.remoteSocket?.connect(config.REMOTE_RTMP_PORT, config.REMOTE_RTMP_URL);
 		this.clientSocket.resume();
-		this.interval = setInterval(this.sendChunks.bind(this), config.LATENCY_INTERVAL);
+		this.interval = setInterval(this.checkChunks.bind(this), config.LATENCY_INTERVAL);
+	}
+
+	close() {
+		this.ended = true;
+		clearInterval(this.interval);
+		this.remoteSocket?.end();
+		this.clientSocket?.end();
+		config.clientConnected = false;
 	}
 
 	initializeClient() {
@@ -42,10 +50,7 @@ export class Connection {
 		this.clientSocket.on('close', hadError => {
 			if (hadError) LOGGER.error(`[Disconnect] Client connection closed with error: ${hadError}`);
 			else LOGGER.info(`[Disconnect] Client connection closed`);
-			this.ended = true;
-			clearInterval(this.interval);
-			this.remoteSocket.end();
-			config.clientConnected = false;
+			this.close();
 		});
 	}
 
@@ -72,24 +77,24 @@ export class Connection {
 		this.remoteSocket.on('close', hadError => {
 			if (hadError) LOGGER.error(`[Disconnect] Remote connection closed with error: ${hadError}`);
 			else LOGGER.info(`[Disconnect] Remote connection closed`);
-			this.ended = true;
-			clearInterval(this.interval);
-			this.clientSocket.end();
-			config.clientConnected = false;
+			this.close();
 		});
 	}
 
-	sendChunks() {
+	checkChunks() {
 		if (this.ended) return;
 		const readyChunks = this.buffer.popReadyChunks();
+		for (const chunk of readyChunks) {
+			this.sendChunk(chunk);
+		}
+	}
 
-		for (const { chunk, id } of readyChunks) {
-			if (this.remoteSocket?.writable) {
-				LOGGER.debug(`[Flush] Sending [${id}] ${chunk.length} bytes to Remote`);
-				this.remoteSocket.write(chunk);
-			} else {
-				LOGGER.warn(`[Flush] Remote socket not writable, skipping chunk [${id}]`);
-			}
+	sendChunk({ chunk, id }) {
+		if (this.remoteSocket?.writable) {
+			LOGGER.debug(`[Flush] Sending [${id}] ${chunk.length} bytes to Remote`);
+			this.remoteSocket.write(chunk);
+		} else {
+			LOGGER.warn(`[Flush] Remote socket not writable, skipping chunk [${id}]`);
 		}
 	}
 

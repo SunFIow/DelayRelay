@@ -1,5 +1,6 @@
 import { ApiServer } from './api/apiServer.js';
 import config from './config.js';
+import { MultiConnection } from './connections/multiConnection.js';
 import { NMSConnection } from './connections/nmsConnection.js';
 import { RtmpConnection } from './connections/rtmpConnection.js';
 import { SimpleConnection } from './connections/simpleConnection.js';
@@ -17,9 +18,12 @@ function rtmp_ConnectionHandler(clientSocket) {
 	return new RtmpConnection(clientSocket);
 }
 
-const relayServer = new RelayServer(rtmp_ConnectionHandler);
+function multi_ConnectionHandler(clientSocket) {
+	return new MultiConnection(clientSocket);
+}
+
+const relayServer = new RelayServer(multi_ConnectionHandler);
 config.server = relayServer;
-config.serverRunning = false;
 
 const apiServer = new ApiServer();
 apiServer.run();

@@ -5,13 +5,13 @@
 //  Copyright (c) 2024 Nodemedia. All rights reserved.
 //
 
+import { randomBytes as _randomBytes, createHmac } from 'node:crypto';
+import { parse } from 'node:querystring';
+import { LOGGER } from '../../../src/logger.js';
+import AVPacket from '../core/avpacket.js';
+import logger from '../core/logger.js';
 import { decodeAmf0Cmd, encodeAmf0Cmd, encodeAmf0Data } from './amf.js';
 import Flv from './flv.js';
-import { createHmac, randomBytes as _randomBytes } from 'node:crypto';
-import logger from '../core/logger.js';
-import AVPacket from '../core/avpacket.js';
-import { parse } from 'node:querystring';
-import { LOGGER_API } from '../../../src/logger.js';
 
 const N_CHUNK_STREAM = 8;
 const RTMP_VERSION = 3;
@@ -218,7 +218,8 @@ function generateS0S1S2(clientsig) {
 	return allBytes;
 }
 
-class RtmpPacket {
+// CHANGE: exported RtmpPacket class for intellisense
+export class RtmpPacket {
 	constructor(fmt = 0, cid = 0) {
 		this.header = {
 			fmt: fmt,
@@ -340,7 +341,7 @@ class Rtmp {
 	 * @param {AVPacket} avpacket
 	 * @returns {Buffer}
 	 */
-	// added possibility for custom chunk size
+	// CHANGE: added possibility for custom chunk size
 	static createMessage = (avpacket, chunkSize = RTMP_MAX_CHUNK_SIZE) => {
 		let rtmpPacket = new RtmpPacket();
 		rtmpPacket.header.fmt = MESSAGE_FORMAT_0;
@@ -403,7 +404,7 @@ class Rtmp {
 	 * @param {RtmpPacket} packet
 	 * @returns {Buffer}
 	 */
-	// added possibility for custom chunk size
+	// CHANGE: added possibility for custom chunk size
 	static chunksCreate = (packet, chunkSize = RTMP_MAX_CHUNK_SIZE) => {
 		let header = packet.header;
 		let payload = packet.payload;
@@ -474,6 +475,7 @@ class Rtmp {
 		while (offset < bytes) {
 			switch (this.parserState) {
 				case RTMP_PARSE_INIT:
+					LOGGER.info(`[RTMP] Parsing Chunks Init`);
 					this.parserBytes = 1;
 					this.parserBuffer[0] = data[p + offset++];
 					if (0 === (this.parserBuffer[0] & 0x3f)) {
@@ -486,6 +488,7 @@ class Rtmp {
 					this.parserState = RTMP_PARSE_BASIC_HEADER;
 					break;
 				case RTMP_PARSE_BASIC_HEADER:
+					LOGGER.info(`[RTMP] Parsing Chunks Basic Header`);
 					while (this.parserBytes < this.parserBasicBytes && offset < bytes) {
 						this.parserBuffer[this.parserBytes++] = data[p + offset++];
 					}
@@ -494,6 +497,7 @@ class Rtmp {
 					}
 					break;
 				case RTMP_PARSE_MESSAGE_HEADER:
+					LOGGER.info(`[RTMP] Parsing Chunks Message Header`);
 					size = rtmpHeaderSize[this.parserBuffer[0] >> 6] + this.parserBasicBytes;
 					while (this.parserBytes < size && offset < bytes) {
 						this.parserBuffer[this.parserBytes++] = data[p + offset++];
@@ -504,6 +508,7 @@ class Rtmp {
 					}
 					break;
 				case RTMP_PARSE_EXTENDED_TIMESTAMP:
+					LOGGER.info(`[RTMP] Parsing Chunks Extended Timestamp`);
 					size = rtmpHeaderSize[this.parserPacket.header.fmt] + this.parserBasicBytes;
 					if (this.parserPacket.header.timestamp === 0xffffff) {
 						size += 4;
@@ -530,6 +535,7 @@ class Rtmp {
 					}
 					break;
 				case RTMP_PARSE_PAYLOAD:
+					LOGGER.info(`[RTMP] Parsing Chunks Payload`);
 					size = Math.min(this.inChunkSize - (this.parserPacket.bytes % this.inChunkSize), this.parserPacket.header.length - this.parserPacket.bytes);
 					size = Math.min(size, bytes - offset);
 					if (size > 0) {
@@ -603,6 +609,7 @@ class Rtmp {
 	};
 
 	packetHandler = () => {
+		LOGGER.info(`[RTMP] Handling Packet`, { ...this.parserPacket, payload: undefined });
 		switch (this.parserPacket.header.type) {
 			case RTMP_TYPE_SET_CHUNK_SIZE:
 			case RTMP_TYPE_ABORT:
@@ -624,6 +631,7 @@ class Rtmp {
 	};
 
 	controlHandler = () => {
+		LOGGER.info(`[RTMP] Handling Control Packet`);
 		let payload = this.parserPacket.payload;
 		switch (this.parserPacket.header.type) {
 			case RTMP_TYPE_SET_CHUNK_SIZE:
@@ -643,9 +651,12 @@ class Rtmp {
 		}
 	};
 
-	eventHandler = () => {};
+	eventHandler = () => {
+		LOGGER.info(`[RTMP] Handling Event Packet`);
+	};
 
 	invokeHandler() {
+		LOGGER.info(`[RTMP] Handling Invoke Packet`);
 		let offset = this.parserPacket.header.type === RTMP_TYPE_FLEX_MESSAGE ? 1 : 0;
 		let payload = this.parserPacket.payload.subarray(offset, this.parserPacket.header.length);
 
@@ -673,6 +684,7 @@ class Rtmp {
 	}
 
 	dataHandler = () => {
+		LOGGER.info(`[RTMP] Handling Data Packet`);
 		let parcket = Flv.parserTag(this.parserPacket.header.type, this.parserPacket.clock, this.parserPacket.header.length, this.parserPacket.payload);
 		// LOGGER_API.debug(`[FLAGS]: ${parcket.flags}`);
 		this.onPacketCallback(parcket);

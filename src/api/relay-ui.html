@@ -10,6 +10,7 @@
 				--fg: #e0e0e0;
 				--accent: #3399ff;
 				--danger: #e74c3c;
+				--pending: #aea027;
 				--success: #27ae60;
 				--input-bg: #23272e;
 				--input-fg: #e0e0e0;
@@ -57,6 +58,9 @@
 				display: inline-block;
 				background: var(--danger);
 			}
+			.status-dot.pending {
+				background: var(--pending);
+			}
 			.status-dot.active {
 				background: var(--success);
 			}
@@ -67,6 +71,10 @@
 			}
 			.w40 {
 				width: 40px;
+			}
+			[disabled] {
+				opacity: 0.5;
+				pointer-events: none;
 			}
 			input[type='number'] {
 				width: auto;
@@ -204,25 +212,34 @@
 				return fetch('/status').then(r => r.json());
 			}
 			function setStatusUI(data) {
+				console.log(data.serverStatus);
 				// Server
 				const serverDot = document.getElementById('server-dot');
 				const serverStatus = document.getElementById('server-status');
 				const serverIcon = document.getElementById('server-icon');
-				if (data.serverRunning) {
+				if (data.serverStatus === 'running') {
 					serverDot.classList.add('active');
+					serverDot.classList.remove('pending');
 					serverIcon.textContent = '\u23F9'; // Stop icon
+				} else if (data.serverStatus === 'pending') {
+					serverDot.classList.remove('active');
+					serverDot.classList.add('pending');
 				} else {
 					serverDot.classList.remove('active');
+					serverDot.classList.remove('pending');
 					serverIcon.textContent = '\u25B6'; // Play icon
 				}
+				document.getElementById('toggle-server').disabled = data.serverStatus === 'pending';
+				// document.getElementById('toggle-delay').disabled = data.serverStatus !== 'running';
+
 				// Delay
 				const delayDot = document.getElementById('delay-dot');
 				const delayIcon = document.getElementById('delay-icon');
-				if (data.state === 'DELAY') {
-					delayDot.classList.add('active');
-					delayIcon.textContent = '\u23F8'; // Pause icon
-				} else {
+				if (data.state === 'REALTIME' || data.state === 'FORWARD') {
 					delayDot.classList.remove('active');
+					delayIcon.textContent = '\u23F3'; // Delay icon
+				} else {
+					delayDot.classList.add('active');
 					delayIcon.textContent = '\u25B6'; // Play icon
 				}
 				// Delay ms
@@ -259,13 +276,13 @@
 			}
 			document.getElementById('toggle-server').onclick = function () {
 				fetchStatus().then(data => {
-					const endpoint = data.serverRunning ? '/stop-server' : '/start-server';
+					const endpoint = data.serverStatus === 'running' ? '/stop-server' : '/start-server';
 					fetch(endpoint).then(() => updateAll());
 				});
 			};
 			document.getElementById('toggle-delay').onclick = function () {
 				fetchStatus().then(data => {
-					const endpoint = data.state === 'DELAY' ? '/deactivate-delay' : '/activate-delay';
+					const endpoint = data.state === 'DELAY' || data.state === 'REWIND' ? '/deactivate-delay' : '/activate-delay';
 					fetch(endpoint).then(() => updateAll());
 				});
 			};

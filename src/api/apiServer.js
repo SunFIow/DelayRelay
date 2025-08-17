@@ -2,7 +2,7 @@ import fs from 'fs';
 import http from 'http';
 
 import config from '../config.js';
-import { LOGGER, LOGGER_API } from '../logger.js';
+import { LOGGER_API } from '../logger.js';
 import { getFilePath, isVM } from '../utils.js';
 
 export class ApiServer {
@@ -172,7 +172,7 @@ export class ApiServer {
 		// /start-server
 		else if (req.url === '/start-server') {
 			if (config.server) {
-				if (config.serverRunning) {
+				if (config.serverStatus !== 'stopped') {
 					res.writeHead(200, { 'Content-Type': 'text/plain' });
 					res.end('Relay server is already running.\n');
 				} else {
@@ -190,10 +190,11 @@ export class ApiServer {
 		// /stop-server
 		else if (req.url === '/stop-server') {
 			if (config.server) {
-				if (!config.serverRunning) {
+				if (config.serverStatus !== 'running') {
 					res.writeHead(200, { 'Content-Type': 'text/plain' });
 					res.end("Relay server isn't running.\n");
 				} else {
+					LOGGER_API.info('Stopping relay server via API');
 					config.server.close(() => {
 						LOGGER_API.info('Relay server stopped via API');
 						res.writeHead(200, { 'Content-Type': 'text/plain' });
