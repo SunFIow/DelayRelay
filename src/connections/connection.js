@@ -84,15 +84,14 @@ export class Connection {
 	checkChunks() {
 		if (this.ended) return;
 		const readyChunks = this.buffer.popReadyChunks();
-		for (const chunk of readyChunks) {
-			this.sendChunk(chunk);
-		}
+		for (const chunk of readyChunks) this.sendChunk(chunk);
 	}
 
-	sendChunk({ chunk, id }) {
+	/** @param {import('../streamBuffer.js').ChunkData} chunk */
+	sendChunk({ data, id }) {
 		if (this.remoteSocket?.writable) {
-			LOGGER.debug(`[Flush] Sending [${id}] ${chunk.length} bytes to Remote`);
-			this.remoteSocket.write(chunk);
+			LOGGER.debug(`[Flush] Sending [${id}] ${data.length} bytes to Remote`);
+			this.remoteSocket.write(data);
 		} else {
 			LOGGER.warn(`[Flush] Remote socket not writable, skipping chunk [${id}]`);
 		}

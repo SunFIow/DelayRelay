@@ -1,5 +1,4 @@
 import querystring from 'querystring';
-import * as AMF from '../../copyof-node-media-server/src/protocol/amf.js';
 import { LOGGER } from '../logger.js';
 import {
 	CodecType,
@@ -21,30 +20,50 @@ import {
 import RtmpClient from './RtmpClient.js';
 import { RtmpImpl } from './RtmpImpl.js';
 
-/** Declare a return type for parseData
- * which has a boolean for if an error occurred
- * and then either a string which describes the error or a CodecType
- * @typedef {ParserDataSuccess|ParserDataError} ParserDataResult
- */
-
-/**
- * @typedef {Object} ParserDataSuccess
- * @property {false} error - Indicates if an error occurred during parsing.
- * @property {CodecType} codecType - The codec type of the parsed RTMP packet.
- * @property {PacketFlags} flags - The flags associated with the parsed RTMP packet.
- */
-
-/**
- * @typedef {Object} ParserDataError
- * @property {true} error - Indicates if an error occurred during parsing.
- * @property {string} message - The error message.
- */
-
 export class RtmpServer extends RtmpImpl {
 	constructor() {
-		super();
+		super({ name: 'Server', role: 'server' });
 		/** @type {RtmpClient[]} */
 		this.clients = [];
+		this.initEvents();
+	}
+
+	initEvents() {
+		this.on('cmd:connect', command => {
+			LOGGER.info(`[RtmpServer:${this.name}/${this.streamId}] connect`, command);
+			this.onConnect(command);
+		});
+		this.on('cmd:createStream', command => {
+			LOGGER.info(`[RtmpServer:${this.name}/${this.streamId}] createStream`, command);
+			this.onCreateStream(command);
+		});
+		this.on('cmd:publish', command => {
+			LOGGER.info(`[RtmpServer:${this.name}/${this.streamId}] publish`, command);
+			this.onPublish(command);
+		});
+		this.on('cmd:play', command => {
+			LOGGER.info(`[RtmpServer:${this.name}/${this.streamId}] play`, command);
+			this.onPlay(command);
+		});
+		this.on('cmd:deleteStream', command => {
+			LOGGER.info(`[RtmpServer:${this.name}/${this.streamId}] deleteStream`, command);
+			this.onDeleteStream(command);
+		});
+
+		this.on('ctrl:setChunkSize', size => {
+			LOGGER.info(`[RtmpServer:${this.name}/${this.streamId}] setChunkSize`, size);
+			// this.outChunkSize = size;
+			// this.setChunkSize(size);
+			// this.clients.forEach(client => {
+			// 	client.outChunkSize = size;
+			// 	client.setChunkSize(size);
+			// });
+		});
+
+		this.on('command', command => {
+			LOGGER.trace(`[RtmpServer:${this.name}/${this.streamId}] Received command: ${command.cmd} transId=${command.transId}`);
+			this.clients.forEach(client => client.relayCommand(command));
+		});
 	}
 
 	/** @param {RtmpClient} client  */
@@ -57,14 +76,14 @@ export class RtmpServer extends RtmpImpl {
 	}
 
 	sendChunk(chunk) {
-		this.clients.forEach(client => client.sendChunk(chunk));
+		this.clients.forEach(client => client.write(chunk.data));
 	}
 
 	close() {
 		this.clients.forEach(client => client.close());
 	}
 
-	/** @abstract @param {object} req */
+	/** @abstract */
 	onConnectCallback = req => {};
 
 	/** @abstract */
@@ -73,25 +92,12 @@ export class RtmpServer extends RtmpImpl {
 	/** @abstract */
 	onPushCallback = () => {};
 
-	/**
-	 * @param {Buffer} chunks The incoming RTMP chunks.
-	 * @returns {ParserDataResult} Either a error message or the RTMP packet type (e.g., 8 for audio, 9 for video, 18 for metadata)
-	 */
-	parseData(chunks) {
-		const error = this._parserData(chunks); // Parse Client RTMP data
-		if (error) return { error };
-		/** @type {CodecType} */
-		const codecType = this.parserPacket.header.type;
-		const flags = this._parsePacketFlag();
-		return { codecType, flags };
-	}
-
 	/** Parses FLV payload to extract only the relevant packet flag.
 	 * @param {number} type - RTMP packet type (e.g., 8 for audio, 9 for video, 18 for metadata)
 	 * @param {Buffer} payload - The RTMP packet payload (FLV tag data)
 	 * @returns {PacketFlags} -1 if not a valid packet type, otherwise returns the packet flag
 	 */
-	_parsePacketFlag() {
+	parsePacketFlag() {
 		const codecType = this.parserPacket.header.type;
 		const payload = this.parserPacket.payload;
 
@@ -139,90 +145,21 @@ export class RtmpServer extends RtmpImpl {
 		return -1;
 	}
 
-	/**  Handles RTMP invoke messages. */
-	_invokeHandler() {
-		const offset = this.parserPacket.header.type === CodecType.COMMAND_EXTENDED ? 1 : 0;
-		const payload = this.parserPacket.payload.subarray(offset, this.parserPacket.header.length);
-
-		const invokeMessage = AMF.decodeAmf0Cmd(payload);
-		switch (invokeMessage.cmd) {
-			case 'connect':
-				LOGGER.info(`[INVOKE] connect ${invokeMessage.cmd}`, invokeMessage);
-				this._onConnect(invokeMessage);
-				break;
-			case 'createStream':
-				LOGGER.info(`[INVOKE] create stream ${invokeMessage.cmd}`, invokeMessage);
-				this._onCreateStream(invokeMessage);
-				break;
-			case 'publish':
-				this._onPublish(invokeMessage);
-				LOGGER.info(`[INVOKE] publish stream ${invokeMessage.cmd}`, invokeMessage);
-				break;
-			case 'play':
-				LOGGER.info(`[INVOKE] play stream ${invokeMessage.cmd}`, invokeMessage);
-				this._onPlay(invokeMessage);
-				break;
-			case 'deleteStream':
-				LOGGER.info(`[INVOKE] delete stream ${invokeMessage.cmd}`, invokeMessage);
-				this._onDeleteStream(invokeMessage);
-				break;
-			default:
-				LOGGER.info(`[INVOKE] unhandled command ${invokeMessage.cmd}`, invokeMessage);
-				break;
-		}
-
-		this.clients.forEach(client => client.onCommand(invokeMessage));
-	}
-
-	_onConnect(invokeMessage) {
-		const url = new URL(invokeMessage.cmdObj.tcUrl);
-		this.connectCmdObj = invokeMessage.cmdObj;
-		this.streamApp = invokeMessage.cmdObj.app;
+	onConnect(commandMessage) {
+		const url = new URL(commandMessage.cmdObj.tcUrl);
+		this.connectCmdObj = commandMessage.cmdObj;
+		this.streamApp = commandMessage.cmdObj.app;
 		this.streamHost = url.hostname;
-		this.objectEncoding = invokeMessage.cmdObj.objectEncoding != null ? invokeMessage.cmdObj.objectEncoding : 0;
+		this.objectEncoding = commandMessage.cmdObj.objectEncoding != null ? commandMessage.cmdObj.objectEncoding : 0;
 		this.connectTime = new Date();
 		this.startTimestamp = Date.now();
 		this.sendWindowACK(5000000);
 		this.setPeerBandwidth(5000000, 2);
 		this.setChunkSize(this.outChunkSize);
-		this._respondConnect(invokeMessage.transId);
+		this.respondConnect(commandMessage.transId);
 	}
 
-	_onCreateStream(invokeMessage) {
-		this._respondCreateStream(invokeMessage.transId);
-	}
-
-	_onPublish(invokeMessage) {
-		this.streamName = invokeMessage.streamName.split('?')[0];
-		this.streamQuery = querystring.parse(invokeMessage.streamName.split('?')[1]);
-		this.streamId = this.parserPacket.header.stream_id;
-		this._respondPublish();
-		this.onConnectCallback({
-			app: this.streamApp,
-			name: this.streamName,
-			host: this.streamHost,
-			query: this.streamQuery
-		});
-		this.onPushCallback();
-	}
-
-	_onPlay(invokeMessage) {
-		this.streamName = invokeMessage.streamName.split('?')[0];
-		this.streamQuery = querystring.parse(invokeMessage.streamName.split('?')[1]);
-		this.streamId = this.parserPacket.header.stream_id;
-		this._respondPlay();
-		this.onConnectCallback({
-			app: this.streamApp,
-			name: this.streamName,
-			host: this.streamHost,
-			query: this.streamQuery
-		});
-		this.onPlayCallback();
-	}
-
-	_onDeleteStream(invokeMessage) {}
-
-	_respondConnect(tid) {
+	respondConnect(tid) {
 		const opt = {
 			cmd: '_result',
 			transId: tid,
@@ -237,10 +174,14 @@ export class RtmpServer extends RtmpImpl {
 				objectEncoding: this.objectEncoding
 			}
 		};
-		this.sendInvokeMessage(0, opt);
+		this.sendCommandMessage(opt, 0);
 	}
 
-	_respondCreateStream(tid) {
+	onCreateStream(commandMessage) {
+		this.respondCreateStream(commandMessage.transId);
+	}
+
+	respondCreateStream(tid) {
 		this.streams++;
 		const opt = {
 			cmd: '_result',
@@ -248,17 +189,54 @@ export class RtmpServer extends RtmpImpl {
 			cmdObj: null,
 			info: this.streams
 		};
-		this.sendInvokeMessage(0, opt);
+		this.sendCommandMessage(opt, 0);
 	}
 
-	_respondPublish() {
+	onPublish(commandMessage) {
+		this.streamName = commandMessage.streamName.split('?')[0];
+		this.streamQuery = querystring.parse(commandMessage.streamName.split('?')[1]);
+		this.streamId = this.parserPacket.header.stream_id;
+		this.respondPublish();
+		this.onConnectCallback({
+			app: this.streamApp,
+			name: this.streamName,
+			host: this.streamHost,
+			query: this.streamQuery
+		});
+		this.onPushCallback();
+	}
+
+	respondPublish() {
 		this.sendStatusMessage(this.streamId, 'status', 'NetStream.Publish.Start', `/${this.streamApp}/${this.streamName} is now published.`);
 	}
 
-	_respondPlay() {
+	onPlay(commandMessage) {
+		this.streamName = commandMessage.streamName.split('?')[0];
+		this.streamQuery = querystring.parse(commandMessage.streamName.split('?')[1]);
+		this.streamId = this.parserPacket.header.stream_id;
+		this.respondPlay();
+		this.onConnectCallback({
+			app: this.streamApp,
+			name: this.streamName,
+			host: this.streamHost,
+			query: this.streamQuery
+		});
+		this.onPlayCallback();
+	}
+
+	respondPlay() {
 		this.sendStreamStatus(STREAM_BEGIN, this.streamId);
 		this.sendStatusMessage(this.streamId, 'status', 'NetStream.Play.Reset', 'Playing and resetting stream.');
 		this.sendStatusMessage(this.streamId, 'status', 'NetStream.Play.Start', 'Started playing stream.');
 		this.sendRtmpSampleAccess();
+	}
+
+	onDeleteStream(commandMessage) {}
+
+	sendStreamStatus(st, id) {
+		const rtmpBuffer = Buffer.from('020000000000060400000000000000000000', 'hex');
+		rtmpBuffer.writeUInt16BE(st, 12);
+		rtmpBuffer.writeUInt32BE(id, 14);
+		this.emit('response', rtmpBuffer);
 	}
 }

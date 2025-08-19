@@ -17,7 +17,7 @@ import RingBuffer from './ringBuffer.js';
 
 /**
  * @typedef {Object} ChunkData
- * @property {Buffer} chunk
+ * @property {Buffer} data
  * @property {number} time
  * @property {number} id
  * @property {boolean} keyFrame
@@ -73,7 +73,7 @@ export class StreamBuffer {
 		this.lastCodec = codec;
 		this.lastFlags = flags;
 
-		const chunkData = { chunk, time: now, id: this.CURRENT_ID++, keyFrame };
+		const chunkData = { data: chunk, time: now, id: this.CURRENT_ID++, keyFrame };
 		this.buffer.push(chunkData);
 		this.totalLength += chunk.length;
 
@@ -115,7 +115,7 @@ export class StreamBuffer {
 		while (this.buffer.length > 0 && (config.state === 'REALTIME' || now - this.buffer.peek().time > config.STREAM_DELAY_MS)) {
 			const buf = this.buffer.shift();
 			readyChunks.push(buf);
-			this.totalLength -= buf.chunk.length;
+			this.totalLength -= buf.data.length;
 		}
 
 		if (readyChunks.length > 0) {
@@ -165,7 +165,7 @@ export class StreamBuffer {
 			const chunkData = this.delayBuffer.get(i);
 			if (this.buffer.findIndex(b => b.id === chunkData.id) === -1) {
 				this.buffer.unshift(chunkData);
-				this.totalLength += chunkData.chunk.length;
+				this.totalLength += chunkData.data.length;
 			}
 		}
 	}
@@ -188,7 +188,7 @@ export class StreamBuffer {
 		// Now remove all chunks before the most recent key frame
 		if (mostRecentKeyFrameStart !== -1) {
 			for (let i = 0; i < mostRecentKeyFrameStart; i++) this.buffer.shift();
-			this.totalLength = this.buffer.reduce((sum, buf) => sum + buf.chunk.length, 0);
+			this.totalLength = this.buffer.reduce((sum, buf) => sum + buf.data.length, 0);
 		} else {
 			this.buffer.clear();
 			this.totalLength = 0;

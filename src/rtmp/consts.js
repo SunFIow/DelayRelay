@@ -12,7 +12,7 @@ export const CodecType = {
 	DATA_EXTENDED: 0x0f, // 15 Data Extended.
 	CONTAINER_EXTENDED: 0x10, // 16 Container Extended.
 	COMMAND_EXTENDED: 0x11, // 17 Command Extended (An AMF3 type command).
-	DATA: 0x12, // 18 Data (Invoke (onMetaData info is sent as such)).
+	DATA: 0x12, // 18 Data (Command (onMetaData info is sent as such)).
 	CONTAINER: 0x13, // 19 Container.
 	COMMAND: 0x14, // 20 Command (An AMF0 type command).
 	UDP: 0x15, // 21 UDP
@@ -47,9 +47,9 @@ export const FLV_FRAME_KEY = 1;
 export const FLV_CODECID_AAC = 10; /** @enum {number} */
 
 export const RTMP_HANDSHAKE_UNINIT = 0;
-export const RTMP_HANDSHAKE_0 = 1;
-export const RTMP_HANDSHAKE_1 = 2;
-export const RTMP_HANDSHAKE_2 = 3;
+export const RTMP_HANDSHAKE_BEGIN = 1;
+export const RTMP_HANDSHAKE_CONT = 2;
+export const RTMP_HANDSHAKE_COMP = 3;
 export const RTMP_HANDSHAKE_SIZE = 1536; // Size of the RTMP handshake payload
 export const SHA256DL = 32;
 
@@ -66,7 +66,7 @@ export const RTMP_CHUNK_TYPE_1 = 1; // 7-bytes: delta(3) + length(3) + stream ty
 export const RTMP_CHUNK_TYPE_2 = 2; // 3-bytes: delta(3)
 
 export const RTMP_CHANNEL_PROTOCOL = 2;
-export const RTMP_CHANNEL_INVOKE = 3;
+export const RTMP_CHANNEL_COMMAND = 3;
 export const RTMP_CHANNEL_AUDIO = 4;
 export const RTMP_CHANNEL_VIDEO = 5;
 export const RTMP_CHANNEL_DATA = 6;
