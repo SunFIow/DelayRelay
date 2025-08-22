@@ -1,8 +1,6 @@
 import { createHmac, randomBytes } from 'crypto';
 import { EventEmitter } from 'events';
-import * as AMF from '../../copyof-node-media-server/src/protocol/amf.js';
-import Flv from '../../copyof-node-media-server/src/protocol/flv.js';
-import Rtmp from '../../copyof-node-media-server/src/protocol/rtmp.js';
+import { decodeAmf0Cmd, encodeAmf0Cmd, encodeAmf0Data } from './amf.js';
 import { LOGGER } from '../logger.js';
 import {
 	CodecType,
@@ -23,15 +21,22 @@ import {
 	RTMP_HANDSHAKE_CONT,
 	RTMP_HANDSHAKE_SIZE,
 	RTMP_HANDSHAKE_UNINIT,
-	RTMP_MAX_CHUNK_SIZE,
 	RTMP_PARSE_BASIC_HEADER,
 	RTMP_PARSE_EXTENDED_TIMESTAMP,
 	RTMP_PARSE_INIT,
 	RTMP_PARSE_MESSAGE_HEADER,
 	RTMP_PARSE_PAYLOAD,
 	rtmpHeaderSize,
-	SHA256DL
+	SHA256DL,
+	STREAM_BEGIN,
+	STREAM_DRY,
+	STREAM_EOF,
+	STREAM_IS_RECORDED,
+	STREAM_PING_REQUEST,
+	STREAM_PING_RESPONSE,
+	STREAM_SET_BUF_LENGTH
 } from './consts.js';
+import { createChunks, createMessage } from './RtmpMessage.js';
 import { RtmpPacket } from './RtmpPacket.js';
 
 /**
@@ -58,7 +63,6 @@ export class RtmpImpl extends EventEmitter {
 		super();
 		this.role = role;
 		this.name = name ?? 'RTMP';
-
 		this.handshakePayload = Buffer.alloc(RTMP_HANDSHAKE_SIZE);
 		this.handshakeState = role === 'server' ? RTMP_HANDSHAKE_UNINIT : undefined;
 		this.handshakeBytes = 0;
@@ -74,12 +78,12 @@ export class RtmpImpl extends EventEmitter {
 		this.outChunkSize = 4096; // RTMP_MAX_CHUNK_SIZE;
 
 		this.streams = 0;
-		this.flv = new Flv();
 
 		this.pktType = -1;
 		this.pktFlags = -1;
 	}
 
+	/** @param {Buffer} chunks */
 	feed(chunks) {
 		let bytesRemaining = chunks.length;
 		let position = 0;
@@ -116,7 +120,7 @@ export class RtmpImpl extends EventEmitter {
 					LOGGER.trace(`[${this.name}] waiting for C2/S2 Handshake`);
 					bytesToProcess = RTMP_HANDSHAKE_SIZE - this.handshakeBytes;
 					if (bytesToProcess > bytesRemaining) bytesToProcess = bytesRemaining;
-					chunks.copy(this.handshakePayload, this.handshakeBytes, position, bytesToProcess);
+					chunks.copy(this.handshakePayload, this.handshakeBytes, position, position + bytesToProcess);
 					this.handshakeBytes += bytesToProcess;
 					bytesRemaining -= bytesToProcess;
 					position += bytesToProcess;
@@ -149,7 +153,7 @@ export class RtmpImpl extends EventEmitter {
 		while (offset < bytes) {
 			switch (this.parserState) {
 				case RTMP_PARSE_INIT:
-					// LOGGER.trace(`[${this.name}] Parsing initialized`);
+					LOGGER.trace(`[${this.name}] Parsing initialized`);
 					this.parserBytes = 1;
 					this.parserBuffer[0] = data[position + offset++];
 					if (0 === (this.parserBuffer[0] & 0x3f)) this.parserBasicBytes = 2;
@@ -158,7 +162,7 @@ export class RtmpImpl extends EventEmitter {
 					this.parserState = RTMP_PARSE_BASIC_HEADER;
 					break;
 				case RTMP_PARSE_BASIC_HEADER:
-					// LOGGER.trace(`[${this.name}] Parsing basic header`);
+					LOGGER.trace(`[${this.name}] Parsing basic header`);
 					while (this.parserBytes < this.parserBasicBytes && offset < bytes) {
 						this.parserBuffer[this.parserBytes++] = data[position + offset++];
 					}
@@ -167,7 +171,7 @@ export class RtmpImpl extends EventEmitter {
 					}
 					break;
 				case RTMP_PARSE_MESSAGE_HEADER:
-					// LOGGER.trace(`[${this.name}] Parsing message header`);
+					LOGGER.trace(`[${this.name}] Parsing message header`);
 					size = rtmpHeaderSize[this.parserBuffer[0] >> 6] + this.parserBasicBytes;
 					while (this.parserBytes < size && offset < bytes) {
 						this.parserBuffer[this.parserBytes++] = data[position + offset++];
@@ -178,7 +182,7 @@ export class RtmpImpl extends EventEmitter {
 					}
 					break;
 				case RTMP_PARSE_EXTENDED_TIMESTAMP:
-					// LOGGER.trace(`[${this.name}] Parsing extended timestamp`);
+					LOGGER.trace(`[${this.name}] Parsing extended timestamp`);
 					size = rtmpHeaderSize[this.parserPacket.header.fmt] + this.parserBasicBytes;
 					if (this.parserPacket.header.timestamp === 0xffffff) {
 						size += 4;
@@ -205,7 +209,7 @@ export class RtmpImpl extends EventEmitter {
 					}
 					break;
 				case RTMP_PARSE_PAYLOAD:
-					// LOGGER.trace(`[${this.name}] Parsing payload`);
+					LOGGER.trace(`[${this.name}] Parsing payload`);
 					size = Math.min(this.inChunkSize - (this.parserPacket.bytes % this.inChunkSize), this.parserPacket.header.length - this.parserPacket.bytes);
 					size = Math.min(size, bytes - offset);
 					if (size > 0) {
@@ -214,7 +218,7 @@ export class RtmpImpl extends EventEmitter {
 					this.parserPacket.bytes += size;
 					offset += size;
 
-					// LOGGER.trace(`[${this.name}] Parsed ${size} bytes, total: ${this.parserPacket.bytes}/${this.parserPacket.header.length}`);
+					LOGGER.trace(`[${this.name}] Parsed ${size} bytes, total: ${this.parserPacket.bytes}/${this.parserPacket.header.length}`);
 					if (this.parserPacket.bytes >= this.parserPacket.header.length) {
 						this.parserState = RTMP_PARSE_INIT;
 						this.parserPacket.bytes = 0;
@@ -284,6 +288,51 @@ export class RtmpImpl extends EventEmitter {
 		const type = this.parserPacket.header.type;
 		const size = this.parserPacket.header.length;
 
+		LOGGER.trace(`[${this.name}] Received Payload with header:`, this.parserPacket.header);
+
+		switch (type) {
+			case CodecType.SET_PACKET_SIZE:
+			case CodecType.ABORT:
+			case CodecType.ACKNOWLEDGE:
+			case CodecType.WINDOW_ACKNOWLEDGEMENT_SIZE:
+			case CodecType.SET_PEER_BANDWIDTH:
+				this.controlHandler(type, payload);
+				break;
+			case CodecType.CONTROL:
+				this.userControlHandler(payload);
+				break;
+			case CodecType.COMMAND_EXTENDED:
+			case CodecType.COMMAND:
+				const offset = type === CodecType.COMMAND_EXTENDED ? 1 : 0; // COMMAND_EXTENDED uses 1-byte prefix
+				const cmd_payload = payload.subarray(offset, size);
+				const cmd_message = decodeAmf0Cmd(cmd_payload);
+				const cmd = cmd_message.cmd;
+				this.emit('command', cmd_message);
+				this.emit(`cmd:${cmd}`, cmd_message);
+				break;
+			case CodecType.AUDIO:
+			case CodecType.VIDEO:
+			case CodecType.DATA_EXTENDED: // AMF3
+			case CodecType.DATA: // AMF0
+				const message = createMessage(this.parserPacket, this.outChunkSize);
+				this.emit('packet', message);
+				break;
+			case CodecType.VIRTUAL_CONTROL: //
+			case CodecType.CONTAINER_EXTENDED: // Shared Object Extended (AFM3)
+			case CodecType.CONTAINER: // Shared Object (AMF0)
+			case CodecType.UDP: //
+			case CodecType.AGGREGATE: // Aggregate (series of rtmp sub-messages)
+			case CodecType.PRESENT: //
+				// Not support yet
+				LOGGER.warn(`[${this.name}] Unsupported RTMP packet type: ${type}`);
+				break;
+			default:
+				LOGGER.warn(`[${this.name}] Unknown RTMP packet type: ${type}`);
+				break;
+		}
+	}
+
+	controlHandler(type, payload) {
 		switch (type) {
 			case CodecType.SET_PACKET_SIZE:
 				this.inChunkSize = payload.readUInt32BE(0);
@@ -301,47 +350,80 @@ export class RtmpImpl extends EventEmitter {
 				this.emit('control', { type, name: 'acknowledge' });
 				this.emit('ctrl:acknowledge');
 				break;
-			case CodecType.SERVER_BANDWIDTH:
+			case CodecType.WINDOW_ACKNOWLEDGEMENT_SIZE:
 				this.ackSize = payload.readUInt32BE(0);
-				LOGGER.info(`[${this.name}] Server bandwidth: ${this.ackSize}`);
-				this.emit('control', { type, name: 'serverBandwidth', size: this.ackSize });
-				this.emit('ctrl:serverBandwidth', this.ackSize);
+				LOGGER.info(`[${this.name}] Window Acknowledgement Size: ${this.ackSize}`);
+				this.emit('control', { type, name: 'windowAcknowledgementSize', size: this.ackSize });
+				this.emit('ctrl:windowAcknowledgementSize', this.ackSize);
 				break;
-			case CodecType.CLIENT_BANDWIDTH:
-				this.cltSize = payload.readUInt32BE(0);
-				LOGGER.info(`[${this.name}] Client bandwidth: ${this.cltSize}`);
-				this.emit('control', { type, name: 'clientBandwidth', size: this.cltSize });
-				this.emit('ctrl:clientBandwidth', this.cltSize);
+			case CodecType.SET_PEER_BANDWIDTH:
+				this.peerBW = payload.readUInt32BE(0);
+				LOGGER.info(`[${this.name}] Set Peer Bandwidth: ${this.peerBW}`);
+				this.emit('control', { type, name: 'setPeerBandwidth', size: this.peerBW });
+				this.emit('ctrl:setPeerBandwidth', this.peerBW);
 				break;
-			case CodecType.CONTROL:
-				LOGGER.info(`[${this.name}] Control`);
-				this.emit('control', { type, name: 'control' });
-				this.emit('ctrl:control');
-				break;
-			case CodecType.COMMAND_EXTENDED:
-			case CodecType.COMMAND:
-				const offset = type === CodecType.COMMAND_EXTENDED ? 1 : 0; // COMMAND_EXTENDED uses 1-byte prefix
-				const cmd_payload = payload.subarray(offset, size);
-				const cmd_message = AMF.decodeAmf0Cmd(cmd_payload);
-				const cmd = cmd_message.cmd;
-				this.emit('command', cmd_message);
-				this.emit(`cmd:${cmd}`, cmd_message);
-				break;
-			case CodecType.AUDIO:
-			case CodecType.VIDEO:
-			case CodecType.DATA_EXTENDED: // AMF3
-			case CodecType.DATA: // AMF0
-				return this.dataHandler();
 		}
 	}
 
-	dataHandler() {
-		const packet = Flv.parserTag(this.parserPacket.header.type, this.parserPacket.clock, this.parserPacket.header.length, this.parserPacket.payload);
-		const buf = Rtmp.createMessage(packet, this.outChunkSize);
-		LOGGER.trace(`[${this.name}] Data handler called (${this.outChunkSize}): ${buf.length}`);
-		this.pktType = packet.codec_type;
-		this.pktFlags = packet.flags;
-		this.emit('packet', { type: this.pktType, flags: this.pktFlags, payload: buf });
+	userControlHandler(payload) {
+		const eventType = payload.readUInt16BE(0);
+
+		switch (eventType) {
+			case STREAM_BEGIN: {
+				LOGGER.info(`[${this.name}] Stream begin`);
+				const streamId = payload.readUInt32BE(2);
+				this.emit('user:control', { eventType, name: 'streamBegin', streamId });
+				this.emit('u:ctrl:streamBegin', streamId);
+				break;
+			}
+			case STREAM_EOF: {
+				LOGGER.info(`[${this.name}] Stream EOF`);
+				const streamId = payload.readUInt32BE(2);
+				this.emit('user:control', { eventType, name: 'streamEOF', streamId });
+				this.emit('u:ctrl:streamEOF', streamId);
+				break;
+			}
+			case STREAM_DRY: {
+				LOGGER.info(`[${this.name}] Stream dry`);
+				const streamId = payload.readUInt32BE(2);
+				this.emit('user:control', { eventType, name: 'streamDry', streamId });
+				this.emit('u:ctrl:streamDry', streamId);
+				break;
+			}
+			case STREAM_SET_BUF_LENGTH: {
+				LOGGER.info(`[${this.name}] Stream set buffer length`);
+				const streamId = payload.readUInt32BE(2);
+				const bufLength = payload.readUInt32BE(6);
+				this.emit('user:control', { eventType, name: 'streamSetBufLength', streamId, bufLength });
+				this.emit('u:ctrl:streamSetBufLength', streamId, bufLength);
+				break;
+			}
+			case STREAM_IS_RECORDED: {
+				LOGGER.info(`[${this.name}] Stream is recorded`);
+				const streamId = payload.readUInt32BE(2);
+				this.emit('user:control', { eventType, name: 'streamIsRecorded', streamId });
+				this.emit('u:ctrl:streamIsRecorded', streamId);
+				break;
+			}
+			case STREAM_PING_REQUEST: {
+				LOGGER.info(`[${this.name}] Stream ping request`);
+				const timestamp = payload.readUInt32BE(2);
+				this.sendStreamStatus(STREAM_PING_RESPONSE, timestamp);
+				this.emit('user:control', { eventType, name: 'streamPingRequest', timestamp });
+				this.emit('u:ctrl:streamPingRequest', timestamp);
+				break;
+			}
+			case STREAM_PING_RESPONSE: {
+				LOGGER.info(`[${this.name}] Stream ping response`);
+				const timestamp = payload.readUInt32BE(2);
+				this.emit('user:control', { eventType, name: 'streamPingResponse', timestamp });
+				this.emit('u:ctrl:streamPingResponse', timestamp);
+				break;
+			}
+			default:
+				LOGGER.warn(`[${this.name}] Unknown control event type: ${eventType}`);
+				this.emit('user:control', { eventType, name: 'unknown' });
+		}
 	}
 
 	sendACK(size) {
@@ -369,28 +451,28 @@ export class RtmpImpl extends EventEmitter {
 		this.emit('response', chunks);
 	}
 
-	sendCommandMessage(opt, sid) {
+	sendCommandMessage(opt, sid = 0) {
 		const packet = new RtmpPacket();
 		packet.header.fmt = RTMP_CHUNK_TYPE_0;
 		packet.header.cid = RTMP_CHANNEL_COMMAND;
 		packet.header.type = CodecType.COMMAND;
 		packet.header.stream_id = sid;
-		packet.payload = AMF.encodeAmf0Cmd(opt);
+		packet.payload = encodeAmf0Cmd(opt);
 		packet.header.length = packet.payload.length;
-		const chunks = Rtmp.chunksCreate(packet, this.outChunkSize);
-		LOGGER.trace(`[${this.name}] Sending command message: ${opt.cmd} (${opt.transId})`, opt);
+		const chunks = createChunks(packet, this.outChunkSize);
+		LOGGER.trace(`[${this.name}] Sending command message with header: ${opt.cmd} (${opt.transId})`, packet.header, opt);
 		this.emit('response', chunks);
 	}
 
-	sendDataMessage(opt, sid) {
+	sendDataMessage(opt, sid = 0) {
 		const packet = new RtmpPacket();
 		packet.header.fmt = RTMP_CHUNK_TYPE_0;
 		packet.header.cid = RTMP_CHANNEL_DATA;
 		packet.header.type = CodecType.DATA;
-		packet.payload = AMF.encodeAmf0Data(opt);
+		packet.payload = encodeAmf0Data(opt);
 		packet.header.length = packet.payload.length;
 		packet.header.stream_id = sid;
-		const chunks = Rtmp.chunksCreate(packet, this.outChunkSize);
+		const chunks = createChunks(packet, this.outChunkSize);
 		this.emit('response', chunks);
 	}
 
@@ -415,6 +497,13 @@ export class RtmpImpl extends EventEmitter {
 			bool2: false
 		};
 		this.sendDataMessage(opt, sid);
+	}
+
+	sendStreamStatus(st, id) {
+		const rtmpBuffer = Buffer.from('020000000000060400000000000000000000', 'hex');
+		rtmpBuffer.writeUInt16BE(st, 12);
+		rtmpBuffer.writeUInt32BE(id, 14);
+		this.emit('response', rtmpBuffer);
 	}
 }
 

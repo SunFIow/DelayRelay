@@ -21,8 +21,8 @@ import RtmpClient from './RtmpClient.js';
 import { RtmpImpl } from './RtmpImpl.js';
 
 export class RtmpServer extends RtmpImpl {
-	constructor() {
-		super({ name: 'Server', role: 'server' });
+	constructor(name = 'Server') {
+		super({ name, role: 'server' });
 		/** @type {RtmpClient[]} */
 		this.clients = [];
 		this.initEvents();
@@ -61,7 +61,7 @@ export class RtmpServer extends RtmpImpl {
 		});
 
 		this.on('command', command => {
-			LOGGER.trace(`[RtmpServer:${this.name}/${this.streamId}] Received command: ${command.cmd} transId=${command.transId}`);
+			LOGGER.trace(`[RtmpServer:${this.name}/${this.streamId}] Received command: ${command.cmd} transId=${command.transId}`, command);
 			this.clients.forEach(client => client.relayCommand(command));
 		});
 	}
@@ -76,7 +76,12 @@ export class RtmpServer extends RtmpImpl {
 	}
 
 	sendChunk(chunk) {
-		this.clients.forEach(client => client.write(chunk.data));
+		if (!this.clients.length) {
+			LOGGER.warn(`[RTMP] No clients connected to send chunk`);
+			return;
+		}
+		LOGGER.trace(`[RTMP] Sending chunk[${chunk.id}](${chunk.codec}/${chunk.flags}) to ${this.clients.length} clients: ${chunk.data.length} bytes`);
+		this.clients.forEach(client => client.sendChunk(chunk));
 	}
 
 	close() {
@@ -153,8 +158,9 @@ export class RtmpServer extends RtmpImpl {
 		this.objectEncoding = commandMessage.cmdObj.objectEncoding != null ? commandMessage.cmdObj.objectEncoding : 0;
 		this.connectTime = new Date();
 		this.startTimestamp = Date.now();
-		this.sendWindowACK(5000000);
-		this.setPeerBandwidth(5000000, 2);
+		this.sendWindowACK(2500000);
+		this.setPeerBandwidth(2500000, 2);
+		this.sendStreamStatus(STREAM_BEGIN, this.streamId);
 		this.setChunkSize(this.outChunkSize);
 		this.respondConnect(commandMessage.transId);
 	}
@@ -164,13 +170,17 @@ export class RtmpServer extends RtmpImpl {
 			cmd: '_result',
 			transId: tid,
 			cmdObj: {
-				fmsVer: 'FMS/3,0,1,123',
-				capabilities: 31
+				fmsVer: 'FMS/3,5,7,7009',
+				capabilities: 31,
+				mode: 1
 			},
 			info: {
 				level: 'status',
 				code: 'NetConnection.Connect.Success',
-				description: 'Connection succeeded.',
+				description: 'Connection accepted.',
+				data: {
+					string: '3,5,7,7009'
+				},
 				objectEncoding: this.objectEncoding
 			}
 		};
@@ -179,6 +189,7 @@ export class RtmpServer extends RtmpImpl {
 
 	onCreateStream(commandMessage) {
 		this.respondCreateStream(commandMessage.transId);
+		this.sendStreamStatus(STREAM_BEGIN, this.streamId);
 	}
 
 	respondCreateStream(tid) {
@@ -232,11 +243,4 @@ export class RtmpServer extends RtmpImpl {
 	}
 
 	onDeleteStream(commandMessage) {}
-
-	sendStreamStatus(st, id) {
-		const rtmpBuffer = Buffer.from('020000000000060400000000000000000000', 'hex');
-		rtmpBuffer.writeUInt16BE(st, 12);
-		rtmpBuffer.writeUInt32BE(id, 14);
-		this.emit('response', rtmpBuffer);
-	}
 }

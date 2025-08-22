@@ -1939,11 +1939,6 @@ http-errors@2.0.0:
     statuses "2.0.1"
     toidentifier "1.0.1"
 
-http2-express@^1.0.0:
-  version "1.0.1"
-  resolved "https://registry.yarnpkg.com/http2-express/-/http2-express-1.0.1.tgz#5865adc1637220eec55a6dafa2c8d495607751e8"
-  integrity sha512-3NP5595eHFkZOBD4RXCNDrTQvuxKfcr3Q62RrHlywNc0vw/PR2HKxtF4JqFhXWVJsxb9pTf/1hZ8iLaJrWdUmQ==
-
 https-proxy-agent@^5.0.0:
   version "5.0.1"
   resolved "https://registry.yarnpkg.com/https-proxy-agent/-/https-proxy-agent-5.0.1.tgz#c59ef224a04fe8b754f3db0063a25ea30d0005d6"
@@ -2763,14 +2758,13 @@ node-int64@^0.4.0:
   resolved "https://registry.yarnpkg.com/node-int64/-/node-int64-0.4.0.tgz#87a9065cdb355d3182d8f94ce11188b825c68a3b"
   integrity sha512-O5lz91xSOeoXP6DulyHfllpq+Eg00MWitZIbtPfoSEvqIHdl5gfcY6hYzDWnj0qD5tz52PI08u9qUvSVeUBeHw==
 
-node-media-server@^4.0.18:
-  version "4.0.18"
-  resolved "https://registry.yarnpkg.com/node-media-server/-/node-media-server-4.0.18.tgz#fc03e5b7fb9c1ccdee95a4c2b8505ddb79c14b27"
-  integrity sha512-4MTsrSDP1LSr9OFo+x7v40qMdKbuU78cQm/ykslZwMjjcOlGSbUjOsdC06bEwVNNd1zcNT/M+saqtouGK0lhCw==
+node-media-server@^4.0.21:
+  version "4.0.21"
+  resolved "https://registry.yarnpkg.com/node-media-server/-/node-media-server-4.0.21.tgz#e9de1bbb34094a3040f648d83e2c06b8eb2ee566"
+  integrity sha512-60a/ZGYslBfBmEI0EaHIjdLvkPBY3bfn+rgQdASbLDmcOyvkrplnDU8s/A3ocHQ3z0gODwGxudrvNklgrQM02w==
   dependencies:
     cors "^2.8.5"
     express "^4.21.2"
-    http2-express "^1.0.0"
 
 node-releases@^2.0.19:
   version "2.0.19"

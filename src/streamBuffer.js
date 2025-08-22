@@ -12,7 +12,7 @@ import { LOGGER } from './logger.js';
 const LOG_EVERY = 100; // Log every 100 chunks for performance
 
 import config from './config.js';
-import { CodecType, PacketFlags } from './parsing.js';
+import { CodecType, PacketFlags } from './rtmp/consts.js';
 import RingBuffer from './ringBuffer.js';
 
 /**
@@ -73,7 +73,7 @@ export class StreamBuffer {
 		this.lastCodec = codec;
 		this.lastFlags = flags;
 
-		const chunkData = { data: chunk, time: now, id: this.CURRENT_ID++, keyFrame };
+		const chunkData = { data: chunk, time: now, id: this.CURRENT_ID++, keyFrame, codec, flags };
 		this.buffer.push(chunkData);
 		this.totalLength += chunk.length;
 

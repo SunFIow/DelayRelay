@@ -3,7 +3,9 @@ import fs from 'fs';
 import { LOGGER } from './logger.js';
 import { getFilePath } from './utils.js';
 
-const TESTING = true; // Set to true for local testing
+const TESTING = false; // Set to true for local testing
+export const silentProxy = false; // Enable silent proxy mode
+export const dummyRemote = false; // Enable dummy remote server
 
 const CONFIG_PATH = getFilePath('config.json');
 const TEST_PATH = getFilePath('config.test.json');
@@ -151,3 +153,4 @@ class Config {
 
 const config = new Config();
 export default config;
+// const relayTypes = [CodecType.AUDIO, CodecType.VIDEO];

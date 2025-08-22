@@ -57,3 +57,7 @@ This flow ensures you can add, remove, or change stream delay on the fly, with m
 ## License
 
 MIT
+
+## Third-party licenses
+
+See `THIRD-PARTY-LICENSES.md` for a summary of bundled third-party components

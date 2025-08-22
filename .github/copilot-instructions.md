@@ -6,7 +6,7 @@ This project is a Node.js RTMP proxy that adds a configurable stream delay betwe
 
 -  **RelayServer** (`src/relayServer.js`): Listens for incoming RTMP connections from OBS. Creates a `Connection` for each client.
 -  **Connection** (`src/connections/connection.js`): Manages a single OBS client, relays RTMP chunks, and handles buffering for delay.
--  **RtmpConnection** (`src/connections/rtmpConnection.js`): Integrates with `copyof-node-media-server` for RTMP protocol parsing/handshake. **Never modify `copyof-node-media-server/`.**
+-  **RtmpConnection** (`src/connections/rtmpConnection.js`): Integrates with an internal RTMP protocol implementation in `src/rtmp/` for parsing/handshake. The AMF0 encode/decode implementation is vendored at `src/rtmp/amf.js` (Apache-2.0) and retains original attribution.
 -  **StreamBuffer** (`src/streamBuffer.js`): Implements all buffering and delay logic, enforcing chunk/byte limits.
 -  **ApiServer** (`src/apiServer.js`): Exposes an HTTP API for runtime configuration (delay, ports, remote URL, status, etc.). Endpoints are documented in the homepage and code comments.
 -  **config.js**: Central config for ports, delay, buffer limits, and state. All runtime state is managed here and updated via the API.
@@ -33,7 +33,6 @@ This project is a Node.js RTMP proxy that adds a configurable stream delay betwe
 
 -  **OBS**: Connects to the local RTMP port (configurable via API)
 -  **Twitch**: Outbound RTMP connection, URL/port configurable via API
--  **node-media-server**: Used only for protocol handling; do not edit its code
 
 ## Examples
 
@@ -45,7 +44,6 @@ This project is a Node.js RTMP proxy that adds a configurable stream delay betwe
 ## Important Files
 
 -  `src/relayServer.js`, `src/connections/connection.js`, `src/connections/rtmpConnection.js`, `src/streamBuffer.js`, `src/apiServer.js`, `src/config.js`, `src/logger.js`
--  `copyof-node-media-server/` (do not modify)
 -  `test/` (dummy servers for testing)
 -  `bin/` — Contains versioned subfolders (e.g., `0.0.1/`, `1.0.0/`) for finished builds. Each version may include compiled binaries (like `delayrelay.exe`) and a `dist/` directory with bundled JavaScript (`delayrelay.js`) and web UI files (`relay-controls.html`, `relay-ui.html`).
 
@@ -54,7 +52,7 @@ This project is a Node.js RTMP proxy that adds a configurable stream delay betwe
 **For AI agents:**
 
 -  Always use the HTTP API for runtime changes; do not hardcode config values.
--  Never modify `copyof-node-media-server/`.
+-  The active protocol code paths use `src/rtmp/` and `src/rtmp/amf.js` (vendored).
 -  Follow the separation of concerns as described above.
 -  Reference the HTTP API (`ApiServer.endpoints`) for available API endpoints.
 

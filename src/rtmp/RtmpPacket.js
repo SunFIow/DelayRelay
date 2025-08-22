@@ -1,3 +1,10 @@
+/**
+ * Modified from Node-Media-Server (https://github.com/illuspas/Node-Media-Server)
+ * Original author: Chen Mingliang
+ * Original license: Apache-2.0
+ * Changes by: SunFIow — 2025-08-23 — removed dependency on full repo
+ */
+
 export class RtmpPacket {
 	constructor(fmt = 0, cid = 0) {
 		this.header = {

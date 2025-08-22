@@ -23,7 +23,7 @@ You are a code reviewer. Your task is to review the code provided in the context
 -  **Summary**: End with a brief summary of major findings and recommended actions.
 -  **Project Conventions**: Verify the code follows these DelayRelay instructions:
    -  Uses ES6 module syntax (`import`/`export`) for all source files.
-   -  Does not modify anything in `copyof-node-media-server/`.
+   -  Does not modify the active `src/rtmp/` implementation unless necessary;
    -  All runtime configuration changes are handled via the HTTP API (`ApiServer`), not hardcoded.
    -  Logging uses `LOGGER` and `LOGGER_API`, with logs written to `logs/`.
    -  Buffering and delay logic are encapsulated in `StreamBuffer`.

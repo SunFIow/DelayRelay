@@ -1,20 +1,20 @@
 /** @enum {number} */
 export const CodecType = {
-	SET_PACKET_SIZE: 0x01, // 1 Set Packet Size Message.
-	ABORT: 0x02, // 2 Abort.
-	ACKNOWLEDGE: 0x03, // 3 Acknowledge.
-	CONTROL: 0x04, // 4 Control Message.
-	SERVER_BANDWIDTH: 0x05, // 5 Server Bandwidth
-	CLIENT_BANDWIDTH: 0x06, // 6 Client Bandwidth.
-	VIRTUAL_CONTROL: 0x07, // 7 Virtual Control.
-	AUDIO: 0x08, // 8 Audio Packet.
-	VIDEO: 0x09, // 9 Video Packet.
-	DATA_EXTENDED: 0x0f, // 15 Data Extended.
-	CONTAINER_EXTENDED: 0x10, // 16 Container Extended.
-	COMMAND_EXTENDED: 0x11, // 17 Command Extended (An AMF3 type command).
-	DATA: 0x12, // 18 Data (Command (onMetaData info is sent as such)).
-	CONTAINER: 0x13, // 19 Container.
-	COMMAND: 0x14, // 20 Command (An AMF0 type command).
+	SET_PACKET_SIZE: 0x01, // 1 Set Packet Size
+	ABORT: 0x02, // 2 Abort
+	ACKNOWLEDGE: 0x03, // 3 Acknowledge
+	CONTROL: 0x04, // 4 Control
+	WINDOW_ACKNOWLEDGEMENT_SIZE: 0x05, // 5 Server Bandwidth
+	SET_PEER_BANDWIDTH: 0x06, // 6 Client Bandwidth
+	VIRTUAL_CONTROL: 0x07, // 7 Virtual Control
+	AUDIO: 0x08, // 8 Audio Packet
+	VIDEO: 0x09, // 9 Video Packet
+	DATA_EXTENDED: 0x0f, // 15 Data Extended (AMF3 Metadata/Userdata)
+	CONTAINER_EXTENDED: 0x10, // 16 Shared Object Extended (AMF3 Flash object(collection of name-value pairs, synced across multiple clients/etc.))
+	COMMAND_EXTENDED: 0x11, // 17 Command Extended (AMF3 command)
+	DATA: 0x12, // 18 Data (AMF0 Metadata/Userdata)
+	CONTAINER: 0x13, // 19 Shared Object (AMF0 Flash object(collection of name-value pairs, synced across multiple clients/etc.))
+	COMMAND: 0x14, // 20 Command (AMF0 command)
 	UDP: 0x15, // 21 UDP
 	AGGREGATE: 0x16, // 22 Aggregate
 	PRESENT: 0x17 // 23 Present
@@ -64,6 +64,7 @@ export const RTMP_PARSE_PAYLOAD = 4;
 export const RTMP_CHUNK_TYPE_0 = 0; // 11-bytes: timestamp(3) + length(3) + stream type(1) + stream id(4)
 export const RTMP_CHUNK_TYPE_1 = 1; // 7-bytes: delta(3) + length(3) + stream type(1)
 export const RTMP_CHUNK_TYPE_2 = 2; // 3-bytes: delta(3)
+export const RTMP_CHUNK_TYPE_3 = 3; // 0-byte
 
 export const RTMP_CHANNEL_PROTOCOL = 2;
 export const RTMP_CHANNEL_COMMAND = 3;
@@ -78,11 +79,15 @@ export const RTMP_MAX_CHUNK_SIZE = 0xffff;
 // export const RTMP_PING_TIME = 60000;
 // export const RTMP_PING_TIMEOUT = 30000;
 
-export const STREAM_BEGIN = 0x00;
-// export const STREAM_EOF = 0x01;
-// export const STREAM_DRY = 0x02;
-// export const STREAM_EMPTY = 0x1f;
-// export const STREAM_READY = 0x20;
+export const STREAM_BEGIN = 0x00; // 0 Stream Begin
+export const STREAM_EOF = 0x01; // 1 Stream End
+export const STREAM_DRY = 0x02; // 2 Stream Dry
+export const STREAM_SET_BUF_LENGTH = 0x03; // 3 Stream Set Buffer Length
+export const STREAM_IS_RECORDED = 0x04; // 4 Stream is Recorded
+export const STREAM_PING_REQUEST = 0x06; // 6 Ping Request
+export const STREAM_PING_RESPONSE = 0x07; // 7 Ping Response
+// export const STREAM_EMPTY = 0x1f; // 31 Stream Empty
+// export const STREAM_READY = 0x20; // 32 Stream Ready
 
 export const MESSAGE_FORMAT_0 = 0;
 export const MESSAGE_FORMAT_1 = 1;

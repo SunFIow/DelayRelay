@@ -1,2 +1,0 @@
-No changes currently,
-but i implemented a simpler version of the FlvTag parsing as i am only iterested in the AVPacket flags

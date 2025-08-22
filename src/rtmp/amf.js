@@ -1,9 +1,16 @@
 /**
+ * Modified from Node-Media-Server (https://github.com/illuspas/Node-Media-Server)
+ * Original author: Chen Mingliang
+ * Original license: Apache-2.0
+ * Changes by: SunFIow — 2025-08-23 — removed dependency on full repo
+ */
+
+/**
  * Created by delian on 3/12/14.
  * This module provides encoding and decoding of the AMF0 format
  */
 
-import logger from '../core/logger.js';
+// import { LOGGER } from '../logger.js';
 
 const amf0dRules = {
 	0x00: amf0decNumber,
@@ -180,23 +187,23 @@ function amf0decObject(buf) {
 	let obj = {};
 	let iBuf = buf.slice(1);
 	let len = 1;
-	//    logger.debug('ODec',iBuf.readUInt8(0));
+	// LOGGER.debug('ODec',iBuf.readUInt8(0));
 	while (iBuf.readUInt8(0) != 0x09) {
-		// logger.debug('Field', iBuf.readUInt8(0), iBuf);
+		// LOGGER.debug('Field', iBuf.readUInt8(0), iBuf);
 		let prop = amf0decUString(iBuf);
-		// logger.debug('Got field for property', prop);
+		// LOGGER.debug('Got field for property', prop);
 		len += prop.len;
 		if (iBuf.length < prop.len) {
 			break;
 		}
 		if (iBuf.slice(prop.len).readUInt8(0) == 0x09) {
 			len++;
-			// logger.debug('Found the end property');
+			// LOGGER.debug('Found the end property');
 			break;
 		} // END Object as value, we shall leave
 		if (prop.value == '') break;
 		let val = amf0DecodeOne(iBuf.slice(prop.len));
-		// logger.debug('Got field for value', val);
+		// LOGGER.debug('Got field for value', val);
 		obj[prop.value] = val.value;
 		len += val.len;
 		iBuf = iBuf.slice(prop.len + val.len);
@@ -506,7 +513,7 @@ function amf0Decode(buffer) {
  * @returns {*}
  */
 function amfXEncodeOne(rules, o) {
-	//    logger.debug('amfXEncodeOne type',o,amfType(o),rules[amfType(o)]);
+	//    LOGGER.debug('amfXEncodeOne type',o,amfType(o),rules[amfType(o)]);
 	let f = rules[amfType(o)];
 	if (f) return f(o);
 	throw new Error('Unsupported type for encoding!');
@@ -646,12 +653,12 @@ export function encodeAmf0Cmd(opt) {
 	} else {
 		error('Unknown command', opt);
 	}
-	// logger.debug('Encoded as',data.toString('hex'));
+	// LOGGER.debug('Encoded as',data.toString('hex'));
 	return data;
 }
 
 /**
- *
+ * Encode AMF0 Data
  * @param {object} opt
  * @returns {Buffer}
  */
@@ -665,6 +672,6 @@ export function encodeAmf0Data(opt) {
 	} else {
 		error('Unknown data', opt);
 	}
-	// logger.debug('Encoded as',data.toString('hex'));
+	// LOGGER.debug('Encoded as',data.toString('hex'));
 	return data;
 }
